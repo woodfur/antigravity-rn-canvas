@@ -1,0 +1,39 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: #0b0d12;
+  color: #f8fafc;
+}
+
+/* Figma-style dot grid background on the infinite canvas */
+.infinite-canvas-surface {
+  background-color: #0b0d12;
+  background-image: radial-gradient(#23293a 1.25px, transparent 1.25px);
+  background-size: 24px 24px;
+}
+
+/* Modern Web Guidance: Prevent underlying page scroll under modal <dialog> */
+dialog:modal {
+  overscroll-behavior: contain;
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background-color: rgba(6, 8, 15, 0.72);
+  backdrop-filter: blur(4px);
+}

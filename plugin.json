@@ -1,0 +1,12 @@
+{
+  "name": "antigravity-rn-canvas",
+  "displayName": "React Native Visual Canvas",
+  "version": "1.0.0",
+  "description": "Figma-style multi-screen React Native visual canvas with live surgical AST patching and navigation flow visualization for Google Antigravity.",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "Open the React Native visual canvas and list all discovered screens and navigation flows",
+    "Inspect the primary CTA button on HomeScreen and update its background color and copy",
+    "Audit all screens on the visual canvas for consistent typography and spacing"
+  ]
+}

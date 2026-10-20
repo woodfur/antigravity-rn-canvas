@@ -1,0 +1,66 @@
+{
+  "name": "antigravity-rn-canvas",
+  "version": "1.0.0",
+  "private": false,
+  "type": "module",
+  "description": "Figma-style Multi-Screen React Native Visual Canvas & AST Sync Engine for Google Antigravity",
+  "keywords": [
+    "google-antigravity",
+    "react-native",
+    "expo",
+    "visual-canvas",
+    "ast",
+    "mcp",
+    "figma"
+  ],
+  "bin": {
+    "antigravity-rn-canvas": "./bin/cli.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "plugins/",
+    "mcp/",
+    "skills/",
+    "rules/",
+    "assets/",
+    "index.html",
+    "vite.config.ts",
+    "tsconfig.json",
+    "plugin.json",
+    "mcp_config.json",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173",
+    "canvas": "node ./bin/cli.mjs",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "test": "vitest run",
+    "mcp": "node ./bin/cli.mjs --mcp"
+  },
+  "dependencies": {
+    "@babel/generator": "^7.25.0",
+    "@babel/parser": "^7.25.0",
+    "@babel/traverse": "^7.25.0",
+    "@babel/types": "^7.25.0",
+    "@modelcontextprotocol/sdk": "^1.0.1",
+    "@vitejs/plugin-react": "^4.3.2",
+    "lucide-react": "^0.454.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-native-web": "^0.19.12",
+    "tsx": "^4.19.1",
+    "vite": "^5.4.8"
+  },
+  "devDependencies": {
+    "@types/babel__generator": "^7.6.8",
+    "@types/babel__traverse": "^7.20.6",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.2"
+  }
+}
