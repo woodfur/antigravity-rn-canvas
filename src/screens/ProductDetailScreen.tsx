@@ -15,22 +15,26 @@ export default function ProductDetailScreen() {
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <TouchableOpacity
+          activeOpacity={0.78}
           style={styles.backButton}
           onPress={() => navigation.navigate('Home')}
         >
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Text style={styles.backButtonText}>← Catalog</Text>
         </TouchableOpacity>
-        <Text style={styles.headerBadge}>FLAGSHIP AUDIO</Text>
+        <Text style={styles.headerBadge}>MODEL CH-01 // PRO</Text>
       </View>
 
       <View style={styles.showcaseCard}>
-        <Text style={styles.showcaseIcon}>🎧</Text>
-        <Text style={styles.showcaseTag}>48-HOUR BATTERY · USB-C DAC</Text>
+        <Text style={styles.showcaseSpecCode}>45MM BERYLLIUM TRANSDUCER</Text>
+        <Text style={styles.showcaseMonogram}>CH // 01</Text>
+        <Text style={styles.showcaseTag}>48-HOUR BATTERY · DUAL USB-C LOSS-ZERO DAC</Text>
       </View>
 
       <View style={styles.detailsSection}>
-        <Text style={styles.productTitle}>Chronos Studio Pro</Text>
-        <Text style={styles.productPrice}>$349.00</Text>
+        <View style={styles.titlePriceRow}>
+          <Text style={styles.productTitle}>Chronos Studio Pro</Text>
+          <Text style={styles.productPrice}>$349</Text>
+        </View>
         <Text style={styles.productDescription}>
           Custom 45mm beryllium drivers paired with dual-chip room calibration and ultra-soft memory foam ear cushions.
         </Text>
@@ -38,15 +42,15 @@ export default function ProductDetailScreen() {
         <View style={styles.specGrid}>
           <View style={styles.specBox}>
             <Text style={styles.specValue}>-46 dB</Text>
-            <Text style={styles.specLabel}>Active ANC</Text>
+            <Text style={styles.specLabel}>HYBRID ANC</Text>
           </View>
           <View style={styles.specBox}>
             <Text style={styles.specValue}>24-bit</Text>
-            <Text style={styles.specLabel}>Lossless</Text>
+            <Text style={styles.specLabel}>96KHZ PCM</Text>
           </View>
           <View style={styles.specBox}>
             <Text style={styles.specValue}>265 g</Text>
-            <Text style={styles.specLabel}>Featherweight</Text>
+            <Text style={styles.specLabel}>MACHINED TI</Text>
           </View>
         </View>
 
@@ -54,22 +58,24 @@ export default function ProductDetailScreen() {
           {(['Obsidian', 'Silver'] as const).map((finish) => (
             <TouchableOpacity
               key={finish}
+              activeOpacity={0.78}
               style={
                 selectedFinish === finish ? styles.finishPillActive : styles.finishPill
               }
               onPress={() => setSelectedFinish(finish)}
             >
-              <Text style={styles.finishPillText}>{finish} Finish</Text>
+              <Text style={styles.finishPillText}>{finish} Anodized</Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
       <TouchableOpacity
+        activeOpacity={0.78}
         style={styles.buyButton}
         onPress={() => navigation.navigate('Checkout')}
       >
-        <Text style={styles.buyButtonText}>Add to Bag & Checkout</Text>
+        <Text style={styles.buyButtonText}>Reserve Unit &amp; Express Checkout</Text>
       </TouchableOpacity>
     </View>
   );
@@ -78,7 +84,7 @@ export default function ProductDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#090D16',
+    backgroundColor: '#0A0B0E',
     padding: 20,
     justifyContent: 'space-between',
   },
@@ -86,73 +92,93 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 6,
   },
   backButton: {
-    backgroundColor: '#111827',
+    backgroundColor: '#13161E',
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingVertical: 9,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: '#222836',
   },
   backButtonText: {
     color: '#E2E8F0',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
   headerBadge: {
-    color: '#818CF8',
-    fontSize: 11,
+    color: '#38BDF8',
+    fontSize: 10,
     fontWeight: '700',
+    letterSpacing: 1,
   },
   showcaseCard: {
-    backgroundColor: '#111827',
-    borderRadius: 24,
-    paddingVertical: 32,
+    backgroundColor: '#11141C',
+    borderRadius: 16,
+    paddingVertical: 26,
+    paddingHorizontal: 18,
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: '#1E2433',
   },
-  showcaseIcon: {
-    fontSize: 56,
+  showcaseSpecCode: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+  },
+  showcaseMonogram: {
+    color: '#F8FAFC',
+    fontSize: 34,
+    fontWeight: '800',
+    letterSpacing: 2,
   },
   showcaseTag: {
-    color: '#94A3B8',
-    fontSize: 11,
+    color: '#38BDF8',
+    fontSize: 10,
     fontWeight: '600',
+    letterSpacing: 0.8,
   },
   detailsSection: {
     gap: 12,
   },
+  titlePriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+  },
   productTitle: {
     color: '#F8FAFC',
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '700',
+    letterSpacing: -0.4,
   },
   productPrice: {
-    color: '#6366F1',
+    color: '#10B981',
     fontSize: 20,
     fontWeight: '700',
   },
   productDescription: {
     color: '#94A3B8',
-    fontSize: 14,
+    fontSize: 13,
+    lineHeight: 19,
   },
   specGrid: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 4,
+    gap: 8,
+    marginTop: 2,
   },
   specBox: {
     flex: 1,
-    backgroundColor: '#111827',
-    borderRadius: 14,
-    padding: 12,
+    backgroundColor: '#11141C',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: '#1E2433',
   },
   specValue: {
     color: '#F8FAFC',
@@ -161,46 +187,48 @@ const styles = StyleSheet.create({
   },
   specLabel: {
     color: '#64748B',
-    fontSize: 11,
-    marginTop: 2,
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginTop: 3,
   },
   finishRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 4,
+    marginTop: 2,
   },
   finishPillActive: {
     flex: 1,
-    backgroundColor: '#1E1B4B',
-    borderRadius: 12,
-    paddingVertical: 10,
+    backgroundColor: '#161A26',
+    borderRadius: 10,
+    paddingVertical: 11,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#6366F1',
+    borderColor: '#38BDF8',
   },
   finishPill: {
     flex: 1,
-    backgroundColor: '#111827',
-    borderRadius: 12,
-    paddingVertical: 10,
+    backgroundColor: '#11141C',
+    borderRadius: 10,
+    paddingVertical: 11,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: '#1E2433',
   },
   finishPillText: {
     color: '#E2E8F0',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
   buyButton: {
     backgroundColor: '#10B981',
-    borderRadius: 14,
-    paddingVertical: 16,
+    borderRadius: 10,
+    paddingVertical: 15,
     alignItems: 'center',
   },
   buyButtonText: {
     color: '#052E16',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
   },
 });

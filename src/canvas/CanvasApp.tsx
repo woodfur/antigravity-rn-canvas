@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   Layers,
   RefreshCw,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { SCREEN_COMPONENTS, SCREEN_ORDER } from '../screens';
 import { ScreenArtboard } from './ScreenArtboard';
@@ -50,10 +51,12 @@ export const CanvasApp: React.FC = () => {
   const [layout, setLayout] = useState<ArtboardLayoutMap>({});
   const [mode, setMode] = useState<CanvasMode>('inspect');
   const [showFlows, setShowFlows] = useState<boolean>(true);
+  const [density, setDensity] = useState<'compact' | 'spacious'>('compact');
 
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 20, y: 10 });
   const [zoom, setZoom] = useState<number>(0.68);
   const [isPanning, setIsPanning] = useState<boolean>(false);
+  const [isCameraAnimating, setIsCameraAnimating] = useState<boolean>(false);
 
   const [activeScreenId, setActiveScreenId] = useState<string | null>('Home');
   const [highlightedScreenId, setHighlightedScreenId] = useState<string | null>(null);
@@ -69,6 +72,17 @@ export const CanvasApp: React.FC = () => {
   }>({ undoAvailable: 0, redoAvailable: 0 });
 
   const canvasViewportRef = useRef<HTMLDivElement | null>(null);
+  const cameraTimerRef = useRef<number | null>(null);
+
+  const triggerCameraTransition = useCallback(() => {
+    if (cameraTimerRef.current) {
+      window.clearTimeout(cameraTimerRef.current);
+    }
+    setIsCameraAnimating(true);
+    cameraTimerRef.current = window.setTimeout(() => {
+      setIsCameraAnimating(false);
+    }, 390);
+  }, []);
 
   const sortScreensByOrder = useCallback((rawScreens: ScreenMetadata[]) => {
     return [...rawScreens].sort((a, b) => {
@@ -269,7 +283,7 @@ export const CanvasApp: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleUndo, handleRedo]);
 
-  // Center viewport on a specific screen artboard
+  // Center viewport on a specific screen artboard using Emil Kowalski ease-out-expo camera physics
   const focusOnScreen = useCallback(
     (screenId: string) => {
       const pos = layout[screenId];
@@ -281,13 +295,14 @@ export const CanvasApp: React.FC = () => {
       const nextPanX = rect.width / 2 - (pos.x + pos.width / 2) * targetZoom;
       const nextPanY = rect.height / 2 - (pos.y + pos.height / 2) * targetZoom;
 
+      triggerCameraTransition();
       setZoom(targetZoom);
       setPan({ x: Math.round(nextPanX), y: Math.round(nextPanY) });
       setActiveScreenId(screenId);
       setHighlightedScreenId(screenId);
       window.setTimeout(() => setHighlightedScreenId(null), 1600);
     },
-    [layout, zoom]
+    [layout, zoom, triggerCameraTransition]
   );
 
   // Fit all screens in viewport
@@ -314,23 +329,25 @@ export const CanvasApp: React.FC = () => {
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
 
+    triggerCameraTransition();
     setZoom(nextZoom);
     setPan({
       x: Math.round(rect.width / 2 - centerX * nextZoom),
       y: Math.round(rect.height / 2 - centerY * nextZoom),
     });
-  }, [layout, screens.length]);
+  }, [layout, screens.length, triggerCameraTransition]);
 
   // Reset layout to clean horizontal grid
   const handleResetGridLayout = useCallback(() => {
     const reset = buildDefaultLayout(screens);
+    triggerCameraTransition();
     setLayout(reset);
     void fetch('/api/layout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(reset),
     });
-  }, [screens]);
+  }, [screens, triggerCameraTransition]);
 
   // Move single artboard
   const handleMoveArtboard = useCallback((screenId: string, nextX: number, nextY: number) => {
@@ -357,9 +374,10 @@ export const CanvasApp: React.FC = () => {
     [focusOnScreen]
   );
 
-  // Canvas background pointer pan & wheel zoom/pan
+  // Canvas background pointer pan & wheel zoom/pan (0ms direct manipulation override)
   const handleCanvasPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0 && e.button !== 1) return;
+    setIsCameraAnimating(false);
     setIsPanning(true);
 
     const startX = e.clientX;
@@ -385,6 +403,7 @@ export const CanvasApp: React.FC = () => {
   };
 
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    setIsCameraAnimating(false);
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       const delta = -e.deltaY * 0.0015;
@@ -399,22 +418,24 @@ export const CanvasApp: React.FC = () => {
 
   return (
     <div
+      className="zelune-studio-root"
+      data-density={density}
       style={{
         display: 'flex',
         flexDirection: 'column',
         width: '100vw',
         height: '100vh',
-        backgroundColor: '#0B0D12',
-        color: '#F8FAFC',
+        backgroundColor: 'var(--studio-canvas-bg)',
+        color: 'var(--studio-text-primary)',
         overflow: 'hidden',
       }}
     >
       {/* Top Studio Bar */}
       <header
         style={{
-          height: 54,
-          backgroundColor: '#11141D',
-          borderBottom: '1px solid #1E2433',
+          height: 52,
+          backgroundColor: 'var(--studio-surface-1)',
+          borderBottom: '1px solid var(--studio-border-hairline)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -422,30 +443,58 @@ export const CanvasApp: React.FC = () => {
           zIndex: 40,
         }}
       >
-        {/* Left: Brand Identity */}
+        {/* Left: Architectural Brand Identity (No cliché purple-blue gradient slop) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div
             style={{
               width: 30,
               height: 30,
-              borderRadius: 8,
-              background: 'linear-gradient(135deg, #4F46E5 0%, #06B6D4 100%)',
+              borderRadius: 7,
+              backgroundColor: 'var(--studio-surface-2)',
+              border: '1px solid rgba(56, 189, 248, 0.35)',
+              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontWeight: 800,
-              fontSize: 13,
-              color: '#FFFFFF',
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 700,
+              fontSize: 12,
+              letterSpacing: '-0.03em',
+              color: '#38BDF8',
             }}
           >
-            AG
+            ZL
           </div>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em' }}>
-              Zelune Visual Canvas
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: '-0.02em', color: '#F8FAFC' }}>
+                Zelune Visual Canvas
+              </span>
+              <span
+                className="tabular-nums"
+                style={{
+                  fontSize: 10,
+                  fontFamily: 'var(--font-mono)',
+                  color: '#94A3B8',
+                  backgroundColor: 'var(--studio-surface-2)',
+                  border: '1px solid var(--studio-border-hairline)',
+                  padding: '1px 6px',
+                  borderRadius: 4,
+                }}
+              >
+                {screens.length} ARTBOARDS
+              </span>
             </div>
-            <div style={{ fontSize: 11, color: '#64748B', fontFamily: 'JetBrains Mono, monospace' }}>
-              Zelune MCP · React Native AST Studio · {screens.length} Screens Live
+            <div
+              className="tabular-nums"
+              style={{
+                fontSize: 10.5,
+                color: 'var(--studio-text-muted)',
+                fontFamily: 'var(--font-mono)',
+                marginTop: 1,
+              }}
+            >
+              AST Sync MCP · Taste Dials [V:2 M:6 D:{density === 'compact' ? '8' : '5'}]
             </div>
           </div>
         </div>
@@ -455,24 +504,25 @@ export const CanvasApp: React.FC = () => {
           <div
             style={{
               display: 'flex',
-              backgroundColor: '#0B0D12',
+              backgroundColor: 'var(--studio-canvas-bg)',
               padding: 3,
-              borderRadius: 9,
-              border: '1px solid #1E2433',
+              borderRadius: 8,
+              border: '1px solid var(--studio-border-subtle)',
             }}
           >
             <button
               type="button"
+              className="zelune-interactive"
               onClick={() => setMode('inspect')}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
-                padding: '6px 12px',
-                borderRadius: 6,
-                border: 'none',
-                backgroundColor: mode === 'inspect' ? '#4F46E5' : 'transparent',
-                color: mode === 'inspect' ? '#FFFFFF' : '#94A3B8',
+                padding: '5px 11px',
+                borderRadius: 5,
+                border: mode === 'inspect' ? '1px solid rgba(56, 189, 248, 0.35)' : '1px solid transparent',
+                backgroundColor: mode === 'inspect' ? 'var(--studio-surface-3)' : 'transparent',
+                color: mode === 'inspect' ? '#38BDF8' : 'var(--studio-text-secondary)',
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -484,16 +534,17 @@ export const CanvasApp: React.FC = () => {
 
             <button
               type="button"
+              className="zelune-interactive"
               onClick={() => setMode('interact')}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
-                padding: '6px 12px',
-                borderRadius: 6,
-                border: 'none',
-                backgroundColor: mode === 'interact' ? '#10B981' : 'transparent',
-                color: mode === 'interact' ? '#052E16' : '#94A3B8',
+                padding: '5px 11px',
+                borderRadius: 5,
+                border: mode === 'interact' ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid transparent',
+                backgroundColor: mode === 'interact' ? 'rgba(6, 78, 59, 0.45)' : 'transparent',
+                color: mode === 'interact' ? '#34D399' : 'var(--studio-text-secondary)',
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -506,23 +557,49 @@ export const CanvasApp: React.FC = () => {
 
           <button
             type="button"
+            className="zelune-interactive"
             onClick={() => setShowFlows((prev) => !prev)}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: 6,
-              padding: '7px 12px',
-              borderRadius: 8,
-              border: `1px solid ${showFlows ? '#4F46E5' : '#262E40'}`,
-              backgroundColor: showFlows ? '#1E1B4B' : '#161B26',
-              color: showFlows ? '#C7D2FE' : '#94A3B8',
+              padding: '6px 11px',
+              borderRadius: 7,
+              border: `1px solid ${showFlows ? 'rgba(99, 102, 241, 0.45)' : 'var(--studio-border-subtle)'}`,
+              backgroundColor: showFlows ? 'rgba(30, 27, 75, 0.55)' : 'var(--studio-surface-2)',
+              color: showFlows ? '#C7D2FE' : 'var(--studio-text-secondary)',
               fontSize: 12,
               fontWeight: 600,
               cursor: 'pointer',
             }}
           >
-            <GitCommit size={14} />
-            <span>Flow Arrows</span>
+            <GitCommit size={13} />
+            <span>Flow Graph</span>
+          </button>
+
+          {/* Leon Lin Taste-Skill Parametric Density Toggle */}
+          <button
+            type="button"
+            className="zelune-interactive tabular-nums"
+            onClick={() => setDensity((d) => (d === 'compact' ? 'spacious' : 'compact'))}
+            title="Toggle Visual Density Dial (Cockpit 8/10 vs Comfort 5/10)"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 10px',
+              borderRadius: 7,
+              border: '1px solid var(--studio-border-subtle)',
+              backgroundColor: 'var(--studio-surface-2)',
+              color: 'var(--studio-text-secondary)',
+              fontSize: 11.5,
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 500,
+              cursor: 'pointer',
+            }}
+          >
+            <SlidersHorizontal size={12} color="#38BDF8" />
+            <span>{density === 'compact' ? 'Density 8/10' : 'Density 5/10'}</span>
           </button>
         </div>
 
@@ -530,6 +607,7 @@ export const CanvasApp: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button
             type="button"
+            className="zelune-interactive tabular-nums"
             onClick={handleUndo}
             disabled={historyState.undoAvailable === 0}
             title="Undo AST Patch (Cmd+Z)"
@@ -537,21 +615,23 @@ export const CanvasApp: React.FC = () => {
               display: 'inline-flex',
               alignItems: 'center',
               gap: 4,
-              padding: '6px 10px',
-              borderRadius: 7,
-              border: '1px solid #262E40',
-              backgroundColor: '#161B26',
+              padding: '6px 9px',
+              borderRadius: 6,
+              border: '1px solid var(--studio-border-subtle)',
+              backgroundColor: 'var(--studio-surface-2)',
               color: historyState.undoAvailable > 0 ? '#E2E8F0' : '#475569',
-              fontSize: 12,
+              fontSize: 11.5,
+              fontFamily: 'var(--font-mono)',
               cursor: historyState.undoAvailable > 0 ? 'pointer' : 'not-allowed',
             }}
           >
-            <Undo2 size={14} />
+            <Undo2 size={13} />
             <span>{historyState.undoAvailable}</span>
           </button>
 
           <button
             type="button"
+            className="zelune-interactive"
             onClick={handleRedo}
             disabled={historyState.redoAvailable === 0}
             title="Redo AST Patch (Cmd+Shift+Z)"
@@ -559,42 +639,47 @@ export const CanvasApp: React.FC = () => {
               display: 'inline-flex',
               alignItems: 'center',
               gap: 4,
-              padding: '6px 10px',
-              borderRadius: 7,
-              border: '1px solid #262E40',
-              backgroundColor: '#161B26',
+              padding: '6px 9px',
+              borderRadius: 6,
+              border: '1px solid var(--studio-border-subtle)',
+              backgroundColor: 'var(--studio-surface-2)',
               color: historyState.redoAvailable > 0 ? '#E2E8F0' : '#475569',
-              fontSize: 12,
+              fontSize: 11.5,
               cursor: historyState.redoAvailable > 0 ? 'pointer' : 'not-allowed',
             }}
           >
-            <Redo2 size={14} />
+            <Redo2 size={13} />
           </button>
 
-          <div style={{ width: 1, height: 22, backgroundColor: '#1E2433', margin: '0 4px' }} />
+          <div style={{ width: 1, height: 20, backgroundColor: 'var(--studio-border-subtle)', margin: '0 3px' }} />
 
           <button
             type="button"
-            onClick={() => setZoom((z) => Number(Math.max(0.25, z - 0.1).toFixed(2)))}
+            className="zelune-interactive"
+            onClick={() => {
+              triggerCameraTransition();
+              setZoom((z) => Number(Math.max(0.25, z - 0.1).toFixed(2)));
+            }}
             title="Zoom Out"
             style={{
-              padding: 7,
-              borderRadius: 7,
-              border: '1px solid #262E40',
-              backgroundColor: '#161B26',
+              padding: 6,
+              borderRadius: 6,
+              border: '1px solid var(--studio-border-subtle)',
+              backgroundColor: 'var(--studio-surface-2)',
               color: '#CBD5E1',
               cursor: 'pointer',
             }}
           >
-            <ZoomOut size={14} />
+            <ZoomOut size={13} />
           </button>
 
           <span
+            className="tabular-nums"
             style={{
-              minWidth: 48,
+              minWidth: 46,
               textAlign: 'center',
-              fontSize: 12,
-              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 11.5,
+              fontFamily: 'var(--font-mono)',
               color: '#CBD5E1',
             }}
           >
@@ -603,59 +688,67 @@ export const CanvasApp: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => setZoom((z) => Number(Math.min(1.75, z + 0.1).toFixed(2)))}
+            className="zelune-interactive"
+            onClick={() => {
+              triggerCameraTransition();
+              setZoom((z) => Number(Math.min(1.75, z + 0.1).toFixed(2)));
+            }}
             title="Zoom In"
             style={{
-              padding: 7,
-              borderRadius: 7,
-              border: '1px solid #262E40',
-              backgroundColor: '#161B26',
+              padding: 6,
+              borderRadius: 6,
+              border: '1px solid var(--studio-border-subtle)',
+              backgroundColor: 'var(--studio-surface-2)',
               color: '#CBD5E1',
               cursor: 'pointer',
             }}
           >
-            <ZoomIn size={14} />
+            <ZoomIn size={13} />
           </button>
 
           <button
             type="button"
+            className="zelune-interactive"
             onClick={handleFitAllScreens}
             title="Fit All Screens in Viewport"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: 5,
-              padding: '6px 10px',
-              borderRadius: 7,
-              border: '1px solid #262E40',
-              backgroundColor: '#161B26',
+              padding: '6px 9px',
+              borderRadius: 6,
+              border: '1px solid var(--studio-border-subtle)',
+              backgroundColor: 'var(--studio-surface-2)',
               color: '#CBD5E1',
-              fontSize: 12,
+              fontSize: 11.5,
+              fontWeight: 500,
               cursor: 'pointer',
             }}
           >
-            <Maximize size={13} />
+            <Maximize size={12} />
             <span>Fit</span>
           </button>
 
           <button
             type="button"
+            className="zelune-interactive"
             onClick={handleResetGridLayout}
             title="Auto-Arrange Clean Artboard Grid"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: 5,
-              padding: '6px 10px',
-              borderRadius: 7,
-              border: '1px solid #262E40',
-              backgroundColor: '#161B26',
+              padding: '6px 9px',
+              borderRadius: 6,
+              border: '1px solid var(--studio-border-subtle)',
+              backgroundColor: 'var(--studio-surface-2)',
               color: '#CBD5E1',
-              fontSize: 12,
+              fontSize: 11.5,
+              fontWeight: 500,
               cursor: 'pointer',
             }}
           >
-            <LayoutGrid size={13} />
+            <LayoutGrid size={12} />
             <span>Grid</span>
           </button>
         </div>
@@ -665,10 +758,11 @@ export const CanvasApp: React.FC = () => {
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Left Sidebar: Screen Artboard Navigator */}
         <aside
+          className="zelune-scroller"
           style={{
-            width: 220,
-            backgroundColor: '#11141D',
-            borderRight: '1px solid #1E2433',
+            width: 224,
+            backgroundColor: 'var(--studio-surface-1)',
+            borderRight: '1px solid var(--studio-border-hairline)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
@@ -676,36 +770,40 @@ export const CanvasApp: React.FC = () => {
             zIndex: 30,
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div
+              className="tabular-nums"
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '4px 8px',
-                fontSize: 11,
-                fontWeight: 700,
-                color: '#64748B',
-                letterSpacing: '0.05em',
+                padding: '4px 8px 6px',
+                fontSize: 10.5,
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 600,
+                color: 'var(--studio-text-muted)',
+                letterSpacing: '0.06em',
               }}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Layers size={13} color="#6366F1" />
+                <Layers size={12} color="#38BDF8" />
                 <span>SCREENS ({screens.length})</span>
               </span>
               <button
                 type="button"
+                className="zelune-interactive"
                 onClick={() => void fetchScreens()}
                 title="Refresh Screen Discovery"
                 style={{
                   background: 'transparent',
-                  border: 'none',
-                  color: '#64748B',
+                  border: '1px solid transparent',
+                  borderRadius: 4,
+                  color: 'var(--studio-text-muted)',
                   cursor: 'pointer',
-                  padding: 2,
+                  padding: 3,
                 }}
               >
-                <RefreshCw size={12} />
+                <RefreshCw size={11} />
               </button>
             </div>
 
@@ -715,18 +813,22 @@ export const CanvasApp: React.FC = () => {
                 <button
                   key={scr.id}
                   type="button"
+                  className="zelune-interactive zelune-rail-item"
                   onClick={() => focusOnScreen(scr.id)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     width: '100%',
-                    padding: '9px 10px',
-                    borderRadius: 8,
-                    border: `1px solid ${isSelected ? '#4F46E5' : 'transparent'}`,
-                    backgroundColor: isSelected ? '#1E1B4B' : 'transparent',
-                    color: isSelected ? '#F8FAFC' : '#94A3B8',
-                    fontSize: 13,
+                    paddingLeft: 10,
+                    paddingRight: 10,
+                    borderRadius: 7,
+                    border: `1px solid ${
+                      isSelected ? 'rgba(56, 189, 248, 0.35)' : 'transparent'
+                    }`,
+                    backgroundColor: isSelected ? 'var(--studio-surface-2)' : 'transparent',
+                    color: isSelected ? '#F8FAFC' : 'var(--studio-text-secondary)',
+                    fontSize: 12.5,
                     fontWeight: isSelected ? 600 : 500,
                     cursor: 'pointer',
                     textAlign: 'left',
@@ -734,13 +836,14 @@ export const CanvasApp: React.FC = () => {
                 >
                   <span>{scr.id}</span>
                   <span
+                    className="tabular-nums"
                     style={{
                       fontSize: 10,
-                      fontFamily: 'JetBrains Mono, monospace',
-                      color: isSelected ? '#A5B4FC' : '#64748B',
+                      fontFamily: 'var(--font-mono)',
+                      color: isSelected ? '#38BDF8' : 'var(--studio-text-muted)',
                     }}
                   >
-                    {scr.outgoingFlows.length} flows
+                    {scr.outgoingFlows.length}→
                   </span>
                 </button>
               );
@@ -749,22 +852,31 @@ export const CanvasApp: React.FC = () => {
 
           <div
             style={{
-              backgroundColor: '#161B26',
-              border: '1px solid #262E40',
-              borderRadius: 10,
-              padding: 12,
+              backgroundColor: 'var(--studio-surface-2)',
+              border: '1px solid var(--studio-border-hairline)',
+              borderRadius: 9,
+              padding: 11,
               fontSize: 11,
-              color: '#94A3B8',
-              lineHeight: 1.5,
+              color: 'var(--studio-text-secondary)',
+              lineHeight: 1.55,
             }}
           >
-            <div style={{ fontWeight: 700, color: '#E2E8F0', marginBottom: 4 }}>
-              Canvas Controls
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: '0.05em',
+                color: '#E2E8F0',
+                marginBottom: 4,
+              }}
+            >
+              STUDIO ERGONOMICS
             </div>
-            <div>• Drag background to pan</div>
-            <div>• Drag screen header to move</div>
-            <div>• Ctrl/Cmd + Scroll to zoom</div>
-            <div>• Click any element to edit AST</div>
+            <div>• Drag canvas to pan (0ms lock)</div>
+            <div>• Drag artboard header to move</div>
+            <div>• Cmd + Scroll to zoom</div>
+            <div>• Click any node to patch AST</div>
           </div>
         </aside>
 
@@ -781,7 +893,7 @@ export const CanvasApp: React.FC = () => {
             cursor: isPanning ? 'grabbing' : 'grab',
           }}
         >
-          {/* World Transform Container */}
+          {/* World Transform Container: Emil Kowalski ease-out-expo on camera focus, 0ms on direct drag */}
           <div
             style={{
               position: 'absolute',
@@ -790,6 +902,9 @@ export const CanvasApp: React.FC = () => {
               transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
               transformOrigin: '0 0',
               willChange: 'transform',
+              transition: isCameraAnimating
+                ? 'transform var(--duration-camera) var(--ease-out-expo)'
+                : 'none',
             }}
           >
             {showFlows && (

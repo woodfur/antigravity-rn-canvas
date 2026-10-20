@@ -1,3 +1,48 @@
+:root {
+  /* Typography Tokens (pbakaus/impeccable + leonxlnx/taste-skill) */
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Tinted Obsidian Surface Palette (No pure black/untinted gray slop) */
+  --studio-canvas-bg: #08090c;
+  --studio-surface-1: #0d0f14;
+  --studio-surface-2: #13161e;
+  --studio-surface-3: #191d28;
+  --studio-border-hairline: rgba(255, 255, 255, 0.07);
+  --studio-border-subtle: #1e2330;
+  --studio-border-strong: #2a3142;
+
+  /* Text Hierarchy */
+  --studio-text-primary: #f1f5f9;
+  --studio-text-secondary: #94a3b8;
+  --studio-text-muted: #64748b;
+
+  /* Intentional Signal Accents */
+  --studio-accent-cyan: #38bdf8;
+  --studio-accent-indigo: #6366f1;
+  --studio-accent-emerald: #10b981;
+  --studio-accent-amber: #f59e0b;
+
+  /* Emil Kowalski Motion & Easing Tokens (emilkowalski/skills) */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --duration-press: 120ms;
+  --duration-micro: 160ms;
+  --duration-panel: 220ms;
+  --duration-camera: 380ms;
+
+  /* Parametric Taste Density Defaults (leonxlnx/taste-skill) */
+  --inspector-pad-compact: 12px;
+  --inspector-pad-spacious: 20px;
+  --inspector-gap-compact: 14px;
+  --inspector-gap-spacious: 22px;
+  --control-py-compact: 5px;
+  --control-py-spacious: 8px;
+  --rail-item-py-compact: 7px;
+  --rail-item-py-spacious: 10px;
+}
+
 *,
 *::before,
 *::after {
@@ -11,29 +56,195 @@ body,
   padding: 0;
   width: 100%;
   height: 100%;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background-color: #0b0d12;
-  color: #f8fafc;
+  font-family: var(--font-sans);
+  background-color: var(--studio-canvas-bg);
+  color: var(--studio-text-primary);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Figma-style dot grid background on the infinite canvas */
+/* Prevent numeric jitter on coordinates, zoom readouts, line numbers, and prices */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Targeted heading balance (modern-web-guidance: improve-text-layout-and-legibility) */
+.balance-heading {
+  text-wrap: balance;
+}
+
+/* Precision architectural dot matrix on the infinite canvas */
 .infinite-canvas-surface {
-  background-color: #0b0d12;
-  background-image: radial-gradient(#23293a 1.25px, transparent 1.25px);
+  background-color: var(--studio-canvas-bg);
+  background-image: radial-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
-/* Modern Web Guidance: Prevent underlying page scroll under modal <dialog> */
+/* Tactile Studio Controls (emilkowalski/skills + individual-transform-properties) */
+.zelune-interactive {
+  /* Identity transforms prevent stacking-context or z-index shifts on hover/active */
+  translate: 0px 0px;
+  rotate: 0deg;
+  scale: 1;
+  transition:
+    scale var(--duration-press) var(--ease-out),
+    background-color var(--duration-micro) var(--ease-out),
+    border-color var(--duration-micro) var(--ease-out),
+    color var(--duration-micro) var(--ease-out),
+    box-shadow var(--duration-micro) var(--ease-out);
+}
+
+.zelune-interactive:hover:not(:disabled) {
+  border-color: var(--studio-border-strong);
+}
+
+.zelune-interactive:active:not(:disabled) {
+  scale: 0.97;
+}
+
+.zelune-interactive:focus-visible {
+  outline: 1.5px solid var(--studio-accent-cyan);
+  outline-offset: 1px;
+}
+
+/* Parametric Density Reactivity (modern-web-guidance: design-token-reactivity) */
+.zelune-studio-root[data-density="compact"] {
+  --density: compact;
+}
+
+.zelune-studio-root[data-density="spacious"] {
+  --density: spacious;
+}
+
+:where([data-density="compact"]) .zelune-inspector-body {
+  padding: var(--inspector-pad-compact);
+  gap: var(--inspector-gap-compact);
+}
+
+:where([data-density="spacious"]) .zelune-inspector-body {
+  padding: var(--inspector-pad-spacious);
+  gap: var(--inspector-gap-spacious);
+}
+
+:where([data-density="compact"]) .zelune-rail-item {
+  padding-top: var(--rail-item-py-compact);
+  padding-bottom: var(--rail-item-py-compact);
+}
+
+:where([data-density="spacious"]) .zelune-rail-item {
+  padding-top: var(--rail-item-py-spacious);
+  padding-bottom: var(--rail-item-py-spacious);
+}
+
+:where([data-density="compact"]) .zelune-input {
+  padding-top: var(--control-py-compact);
+  padding-bottom: var(--control-py-compact);
+}
+
+:where([data-density="spacious"]) .zelune-input {
+  padding-top: var(--control-py-spacious);
+  padding-bottom: var(--control-py-spacious);
+}
+
+@container style(--density: compact) {
+  .zelune-inspector-body {
+    padding: var(--inspector-pad-compact);
+    gap: var(--inspector-gap-compact);
+  }
+  .zelune-rail-item {
+    padding-top: var(--rail-item-py-compact);
+    padding-bottom: var(--rail-item-py-compact);
+  }
+  .zelune-input {
+    padding-top: var(--control-py-compact);
+    padding-bottom: var(--control-py-compact);
+  }
+}
+
+@container style(--density: spacious) {
+  .zelune-inspector-body {
+    padding: var(--inspector-pad-spacious);
+    gap: var(--inspector-gap-spacious);
+  }
+  .zelune-rail-item {
+    padding-top: var(--rail-item-py-spacious);
+    padding-bottom: var(--rail-item-py-spacious);
+  }
+  .zelune-input {
+    padding-top: var(--control-py-spacious);
+    padding-bottom: var(--control-py-spacious);
+  }
+}
+
+/* Custom Scrollbar Styling (modern-web-guidance: customize-scrollbar-color-and-thickness) */
+.zelune-scroller {
+  --scrollbar-thumb: #262d3d;
+  --scrollbar-track: #0d0f14;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+@supports not (scrollbar-color: auto) {
+  .zelune-scroller::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .zelune-scroller::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+  }
+
+  .zelune-scroller::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+}
+
+/* Inspect Overlay Micro-Transitions */
+.zelune-box-overlay {
+  translate: 0px 0px;
+  scale: 1;
+  transition:
+    top 90ms var(--ease-out),
+    left 90ms var(--ease-out),
+    width 90ms var(--ease-out),
+    height 90ms var(--ease-out),
+    opacity var(--duration-micro) var(--ease-out);
+}
+
+/* Modal <dialog> Choreography & Scroll Containment */
+@keyframes zeluneDialogEntry {
+  from {
+    opacity: 0;
+    scale: 0.96;
+    translate: 0 6px;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+    translate: 0 0;
+  }
+}
+
 dialog:modal {
   overscroll-behavior: contain;
   border: none;
   padding: 0;
   background: transparent;
+  animation: zeluneDialogEntry var(--duration-panel) var(--ease-out-expo) forwards;
 }
 
 dialog::backdrop {
   overflow: hidden;
   overscroll-behavior: contain;
-  background-color: rgba(6, 8, 15, 0.72);
-  backdrop-filter: blur(4px);
+  background-color: rgba(5, 7, 11, 0.76);
+  backdrop-filter: blur(6px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

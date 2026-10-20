@@ -24,14 +24,14 @@ interface InspectorPanelProps {
 }
 
 const COLOR_SWATCHES = [
-  '#4F46E5',
+  '#0A0B0E',
+  '#13161E',
+  '#1E2433',
+  '#38BDF8',
   '#6366F1',
   '#10B981',
-  '#0EA5E9',
   '#F59E0B',
-  '#EF4444',
-  '#111827',
-  '#1E293B',
+  '#F43F5E',
   '#F8FAFC',
 ];
 
@@ -140,7 +140,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
       '```',
       '',
       `Requested Change:`,
-      agentInstruction.trim() || 'Update this component layout and styling.',
+      agentInstruction.trim() || 'Update this component layout and styling per DESIGN.md.',
     ]
       .filter(Boolean)
       .join('\n');
@@ -156,48 +156,73 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   if (!inspected) {
     return (
       <aside
+        className="zelune-scroller"
         style={{
           width: 320,
-          backgroundColor: '#11141D',
-          borderLeft: '1px solid #1E2433',
+          backgroundColor: 'var(--studio-surface-1)',
+          borderLeft: '1px solid var(--studio-border-hairline)',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
-          padding: 20,
-          color: '#94A3B8',
+          padding: 18,
+          color: 'var(--studio-text-secondary)',
           zIndex: 30,
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#F8FAFC', fontWeight: 600, fontSize: 14 }}>
-            <Sliders size={16} color="#6366F1" />
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              color: '#F8FAFC',
+              fontWeight: 600,
+              fontSize: 13.5,
+              letterSpacing: '-0.01em',
+            }}
+          >
+            <Sliders size={15} color="#38BDF8" />
             <span>AST Visual Inspector</span>
           </div>
           <div
             style={{
-              backgroundColor: '#161B26',
-              border: '1px solid #262E40',
-              borderRadius: 12,
-              padding: 16,
-              fontSize: 13,
+              backgroundColor: 'var(--studio-surface-2)',
+              border: '1px solid var(--studio-border-hairline)',
+              borderRadius: 10,
+              padding: 14,
+              fontSize: 12.5,
               lineHeight: 1.6,
             }}
           >
-            Click any UI element on any screen artboard to inspect and live-edit its{' '}
-            <strong style={{ color: '#E2E8F0' }}>React Native StyleSheet</strong> or{' '}
-            <strong style={{ color: '#E2E8F0' }}>Text copy</strong> directly in the{' '}
-            <code style={{ color: '#A5B4FC' }}>.tsx</code> source file.
+            Select any node on a <code style={{ color: '#38BDF8', fontFamily: 'var(--font-mono)' }}>393 × 852</code>{' '}
+            artboard to inspect and live-patch its{' '}
+            <strong style={{ color: '#E2E8F0' }}>StyleSheet.create</strong> rules or{' '}
+            <strong style={{ color: '#E2E8F0' }}>static copy</strong> directly in the{' '}
+            <code style={{ color: '#A5B4FC', fontFamily: 'var(--font-mono)' }}>.tsx</code> AST.
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '0.05em' }}>
-              TWO-TIER SYNC ARCHITECTURE
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+            <div
+              style={{
+                fontSize: 10.5,
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 600,
+                color: 'var(--studio-text-muted)',
+                letterSpacing: '0.06em',
+              }}
+            >
+              DESIGN &amp; SYNC GOVERNANCE
             </div>
-            <div style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.5 }}>
-              • <strong style={{ color: '#CBD5E1' }}>Tier 1 (Direct AST)</strong>: Instant surgical updates to colors, typography, spacing, and copy.
+            <div style={{ fontSize: 12, color: 'var(--studio-text-secondary)', lineHeight: 1.5 }}>
+              • <strong style={{ color: '#CBD5E1' }}>Tier 1 (Surgical AST)</strong>: Instant write-back to colors, typography, spacing, and copy.
             </div>
-            <div style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.5 }}>
-              • <strong style={{ color: '#CBD5E1' }}>Tier 2 (Antigravity Bridge)</strong>: Dispatch structural refactors with exact file &amp; AST context.
+            <div style={{ fontSize: 12, color: 'var(--studio-text-secondary)', lineHeight: 1.5 }}>
+              • <strong style={{ color: '#CBD5E1' }}>Tier 2 (Antigravity Bridge)</strong>: Dispatch structural refactors with exact file &amp; AST path coordinates.
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--studio-text-secondary)', lineHeight: 1.5 }}>
+              • <strong style={{ color: '#CBD5E1' }}>Impeccable &amp; Taste Guardrails</strong>: Governed by{' '}
+              <code style={{ fontFamily: 'var(--font-mono)', color: '#38BDF8' }}>PRODUCT.md</code> &amp;{' '}
+              <code style={{ fontFamily: 'var(--font-mono)', color: '#38BDF8' }}>DESIGN.md</code>.
             </div>
           </div>
         </div>
@@ -205,9 +230,9 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         <div
           style={{
             fontSize: 11,
-            fontFamily: 'JetBrains Mono, monospace',
-            color: '#64748B',
-            borderTop: '1px solid #1E2433',
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--studio-text-muted)',
+            borderTop: '1px solid var(--studio-border-hairline)',
             paddingTop: 12,
           }}
         >
@@ -219,10 +244,11 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
   return (
     <aside
+      className="zelune-scroller"
       style={{
         width: 340,
-        backgroundColor: '#11141D',
-        borderLeft: '1px solid #1E2433',
+        backgroundColor: 'var(--studio-surface-1)',
+        borderLeft: '1px solid var(--studio-border-hairline)',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
@@ -233,25 +259,26 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
       {/* Inspector Header */}
       <div
         style={{
-          padding: '14px 16px',
-          borderBottom: '1px solid #1E2433',
+          padding: '12px 16px',
+          borderBottom: '1px solid var(--studio-border-hairline)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          backgroundColor: '#141824',
+          backgroundColor: 'var(--studio-surface-2)',
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span
               style={{
-                backgroundColor: '#312E81',
+                backgroundColor: 'rgba(99, 102, 241, 0.18)',
+                border: '1px solid rgba(99, 102, 241, 0.4)',
                 color: '#C7D2FE',
-                fontSize: 12,
+                fontSize: 11.5,
                 fontWeight: 700,
-                fontFamily: 'JetBrains Mono, monospace',
-                padding: '2px 7px',
-                borderRadius: 5,
+                fontFamily: 'var(--font-mono)',
+                padding: '1px 6px',
+                borderRadius: 4,
               }}
             >
               &lt;{inspected.tagName}&gt;
@@ -259,12 +286,13 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             {inspected.styleSheetKey && (
               <span
                 style={{
-                  backgroundColor: '#064E3B',
+                  backgroundColor: 'rgba(16, 185, 129, 0.14)',
+                  border: '1px solid rgba(16, 185, 129, 0.35)',
                   color: '#A7F3D0',
                   fontSize: 11,
-                  fontFamily: 'JetBrains Mono, monospace',
-                  padding: '2px 6px',
-                  borderRadius: 5,
+                  fontFamily: 'var(--font-mono)',
+                  padding: '1px 6px',
+                  borderRadius: 4,
                 }}
               >
                 styles.{inspected.styleSheetKey}
@@ -272,11 +300,12 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             )}
           </div>
           <span
+            className="tabular-nums"
             style={{
-              fontSize: 11,
-              fontFamily: 'JetBrains Mono, monospace',
-              color: '#64748B',
-              marginTop: 2,
+              fontSize: 10.5,
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--studio-text-muted)',
+              marginTop: 1,
             }}
           >
             {inspected.file}:{inspected.line}:{inspected.col}
@@ -285,17 +314,19 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
         <button
           type="button"
+          className="zelune-interactive"
           onClick={onClearSelection}
-          title="Close inspector"
+          title="Close inspector (Esc)"
           style={{
             background: 'transparent',
-            border: 'none',
-            color: '#64748B',
+            border: '1px solid transparent',
+            borderRadius: 5,
+            color: 'var(--studio-text-muted)',
             cursor: 'pointer',
             padding: 4,
           }}
         >
-          <X size={16} />
+          <X size={15} />
         </button>
       </div>
 
@@ -304,10 +335,10 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         <div
           style={{
             padding: '6px 16px',
-            backgroundColor: '#1E1B4B',
-            borderBottom: '1px solid #312E81',
+            backgroundColor: 'rgba(30, 27, 75, 0.65)',
+            borderBottom: '1px solid rgba(99, 102, 241, 0.3)',
             fontSize: 11,
-            fontFamily: 'JetBrains Mono, monospace',
+            fontFamily: 'var(--font-mono)',
             color: '#A5B4FC',
             display: 'flex',
             alignItems: 'center',
@@ -329,30 +360,31 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
       {inspected.navigationTarget && (
         <div
           style={{
-            margin: '12px 16px 0',
-            padding: '10px 12px',
-            backgroundColor: '#064E3B',
-            border: '1px solid #10B981',
-            borderRadius: 10,
+            margin: '12px 14px 0',
+            padding: '9px 12px',
+            backgroundColor: 'rgba(6, 78, 59, 0.45)',
+            border: '1px solid rgba(16, 185, 129, 0.45)',
+            borderRadius: 8,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#D1FAE5' }}>
-            <Navigation size={14} color="#34D399" />
+            <Navigation size={13} color="#34D399" />
             <span>
-              Navigates to <strong>{inspected.navigationTarget}</strong>
+              Flow → <strong>{inspected.navigationTarget}</strong>
             </span>
           </div>
           <button
             type="button"
+            className="zelune-interactive"
             onClick={() => onJumpToScreen(inspected.navigationTarget!)}
             style={{
               backgroundColor: '#10B981',
               color: '#052E16',
               border: 'none',
-              borderRadius: 6,
+              borderRadius: 5,
               padding: '4px 8px',
               fontSize: 11,
               fontWeight: 700,
@@ -364,12 +396,23 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         </div>
       )}
 
-      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div className="zelune-inspector-body" style={{ display: 'flex', flexDirection: 'column' }}>
         {/* SECTION 1: Text Copy Editor */}
         {(inspected.isTextEditable || inspected.hasDynamicText) && (
-          <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.05em' }}>
-              <Type size={13} color="#6366F1" />
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 10.5,
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 600,
+                color: 'var(--studio-text-muted)',
+                letterSpacing: '0.06em',
+              }}
+            >
+              <Type size={12} color="#38BDF8" />
               <span>TEXT COPY</span>
             </div>
 
@@ -377,14 +420,15 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               <div
                 style={{
                   padding: 10,
-                  backgroundColor: '#1E1B4B',
-                  border: '1px solid #3730A3',
-                  borderRadius: 8,
-                  fontSize: 12,
-                  color: '#C7D2FE',
+                  backgroundColor: 'var(--studio-surface-2)',
+                  border: '1px solid var(--studio-border-subtle)',
+                  borderRadius: 7,
+                  fontSize: 11.5,
+                  color: '#CBD5E1',
+                  lineHeight: 1.5,
                 }}
               >
-                Contains dynamic JSX expression (<code>{'{...}'}</code>). Protected from static overwrite—use <strong>Ask Antigravity</strong> below to modify expression logic.
+                Contains dynamic JSX expression (<code style={{ color: '#38BDF8' }}>{'{...}'}</code>). Protected from static overwrite—use <strong>Ask Antigravity</strong> below to refactor expression logic.
               </div>
             ) : (
               <textarea
@@ -392,16 +436,18 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 value={localText}
                 onChange={(e) => handleTextChange(e.target.value)}
                 placeholder="Enter text content..."
+                className="zelune-input"
                 style={{
                   width: '100%',
-                  backgroundColor: '#0B0D12',
-                  border: '1px solid #262E40',
-                  borderRadius: 8,
-                  padding: '8px 10px',
+                  backgroundColor: 'var(--studio-canvas-bg)',
+                  border: '1px solid var(--studio-border-subtle)',
+                  borderRadius: 7,
+                  paddingLeft: 10,
+                  paddingRight: 10,
                   color: '#F8FAFC',
-                  fontSize: 13,
+                  fontSize: 12.5,
                   resize: 'vertical',
-                  fontFamily: 'Inter, sans-serif',
+                  fontFamily: 'var(--font-sans)',
                 }}
               />
             )}
@@ -409,15 +455,26 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         )}
 
         {/* SECTION 2: Colors (Background & Text/Foreground) */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.05em' }}>
-            <Palette size={13} color="#6366F1" />
+        <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 10.5,
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 600,
+              color: 'var(--studio-text-muted)',
+              letterSpacing: '0.06em',
+            }}
+          >
+            <Palette size={12} color="#38BDF8" />
             <span>COLORS &amp; SURFACES</span>
           </div>
 
           {/* Background Color */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label style={{ fontSize: 12, color: '#CBD5E1' }}>Background Color</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label style={{ fontSize: 11.5, color: '#CBD5E1' }}>Background Color</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input
                 type="color"
@@ -426,13 +483,13 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   localStyles.backgroundColor.startsWith('#') &&
                   localStyles.backgroundColor.length === 7
                     ? localStyles.backgroundColor
-                    : '#111827'
+                    : '#13161E'
                 }
                 onChange={(e) => handleStyleChange('backgroundColor', e.target.value)}
                 style={{
-                  width: 32,
-                  height: 32,
-                  border: '1px solid #334155',
+                  width: 30,
+                  height: 30,
+                  border: '1px solid var(--studio-border-subtle)',
                   borderRadius: 6,
                   backgroundColor: 'transparent',
                   cursor: 'pointer',
@@ -441,17 +498,19 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               <input
                 type="text"
                 value={String(localStyles.backgroundColor ?? '')}
-                placeholder="#111827"
+                placeholder="#13161E"
                 onChange={(e) => handleStyleChange('backgroundColor', e.target.value)}
+                className="zelune-input tabular-nums"
                 style={{
                   flex: 1,
-                  backgroundColor: '#0B0D12',
-                  border: '1px solid #262E40',
+                  backgroundColor: 'var(--studio-canvas-bg)',
+                  border: '1px solid var(--studio-border-subtle)',
                   borderRadius: 6,
-                  padding: '6px 10px',
+                  paddingLeft: 10,
+                  paddingRight: 10,
                   color: '#F8FAFC',
                   fontSize: 12,
-                  fontFamily: 'JetBrains Mono, monospace',
+                  fontFamily: 'var(--font-mono)',
                 }}
               />
             </div>
@@ -460,6 +519,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 <button
                   key={`bg-${hex}`}
                   type="button"
+                  className="zelune-interactive"
                   onClick={() => handleStyleChange('backgroundColor', hex)}
                   title={`Set backgroundColor to ${hex}`}
                   style={{
@@ -469,8 +529,8 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     backgroundColor: hex,
                     border:
                       localStyles.backgroundColor === hex
-                        ? '2px solid #FFFFFF'
-                        : '1px solid #334155',
+                        ? '2px solid #38BDF8'
+                        : '1px solid rgba(255, 255, 255, 0.14)',
                     cursor: 'pointer',
                   }}
                 />
@@ -479,8 +539,8 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           </div>
 
           {/* Text Color */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label style={{ fontSize: 12, color: '#CBD5E1' }}>Text Color</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label style={{ fontSize: 11.5, color: '#CBD5E1' }}>Text Color</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input
                 type="color"
@@ -493,9 +553,9 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 }
                 onChange={(e) => handleStyleChange('color', e.target.value)}
                 style={{
-                  width: 32,
-                  height: 32,
-                  border: '1px solid #334155',
+                  width: 30,
+                  height: 30,
+                  border: '1px solid var(--studio-border-subtle)',
                   borderRadius: 6,
                   backgroundColor: 'transparent',
                   cursor: 'pointer',
@@ -506,15 +566,17 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 value={String(localStyles.color ?? '')}
                 placeholder="#F8FAFC"
                 onChange={(e) => handleStyleChange('color', e.target.value)}
+                className="zelune-input tabular-nums"
                 style={{
                   flex: 1,
-                  backgroundColor: '#0B0D12',
-                  border: '1px solid #262E40',
+                  backgroundColor: 'var(--studio-canvas-bg)',
+                  border: '1px solid var(--studio-border-subtle)',
                   borderRadius: 6,
-                  padding: '6px 10px',
+                  paddingLeft: 10,
+                  paddingRight: 10,
                   color: '#F8FAFC',
                   fontSize: 12,
-                  fontFamily: 'JetBrains Mono, monospace',
+                  fontFamily: 'var(--font-mono)',
                 }}
               />
             </div>
@@ -522,15 +584,26 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         </section>
 
         {/* SECTION 3: Typography */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.05em' }}>
-            <Type size={13} color="#6366F1" />
+        <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 10.5,
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 600,
+              color: 'var(--studio-text-muted)',
+              letterSpacing: '0.06em',
+            }}
+          >
+            <Type size={12} color="#38BDF8" />
             <span>TYPOGRAPHY</span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <div>
-              <label style={{ fontSize: 11, color: '#94A3B8', display: 'block', marginBottom: 4 }}>
+              <label style={{ fontSize: 11, color: 'var(--studio-text-secondary)', display: 'block', marginBottom: 4 }}>
                 Font Size (px)
               </label>
               <input
@@ -538,35 +611,39 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 value={localStyles.fontSize ?? ''}
                 placeholder="15"
                 onChange={(e) => handleNumericStyleChange('fontSize', e.target.value)}
+                className="zelune-input tabular-nums"
                 style={{
                   width: '100%',
-                  backgroundColor: '#0B0D12',
-                  border: '1px solid #262E40',
+                  backgroundColor: 'var(--studio-canvas-bg)',
+                  border: '1px solid var(--studio-border-subtle)',
                   borderRadius: 6,
-                  padding: '6px 8px',
+                  paddingLeft: 8,
+                  paddingRight: 8,
                   color: '#F8FAFC',
                   fontSize: 12,
-                  fontFamily: 'JetBrains Mono, monospace',
+                  fontFamily: 'var(--font-mono)',
                 }}
               />
             </div>
 
             <div>
-              <label style={{ fontSize: 11, color: '#94A3B8', display: 'block', marginBottom: 4 }}>
+              <label style={{ fontSize: 11, color: 'var(--studio-text-secondary)', display: 'block', marginBottom: 4 }}>
                 Font Weight
               </label>
               <select
                 value={String(localStyles.fontWeight ?? '600')}
                 onChange={(e) => handleStyleChange('fontWeight', e.target.value)}
+                className="zelune-input tabular-nums"
                 style={{
                   width: '100%',
-                  backgroundColor: '#0B0D12',
-                  border: '1px solid #262E40',
+                  backgroundColor: 'var(--studio-canvas-bg)',
+                  border: '1px solid var(--studio-border-subtle)',
                   borderRadius: 6,
-                  padding: '6px 8px',
+                  paddingLeft: 8,
+                  paddingRight: 8,
                   color: '#F8FAFC',
                   fontSize: 12,
-                  fontFamily: 'JetBrains Mono, monospace',
+                  fontFamily: 'var(--font-mono)',
                 }}
               >
                 {FONT_WEIGHTS.map((w) => (
@@ -580,13 +657,24 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         </section>
 
         {/* SECTION 4: Layout, Spacing & Radius */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.05em' }}>
-            <Box size={13} color="#6366F1" />
+        <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 10.5,
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 600,
+              color: 'var(--studio-text-muted)',
+              letterSpacing: '0.06em',
+            }}
+          >
+            <Box size={12} color="#38BDF8" />
             <span>SPACING &amp; GEOMETRY</span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {[
               { key: 'borderRadius', label: 'Corner Radius' },
               { key: 'padding', label: 'Padding (All)' },
@@ -596,7 +684,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               { key: 'borderWidth', label: 'Border Width' },
             ].map(({ key, label }) => (
               <div key={key}>
-                <label style={{ fontSize: 11, color: '#94A3B8', display: 'block', marginBottom: 4 }}>
+                <label style={{ fontSize: 11, color: 'var(--studio-text-secondary)', display: 'block', marginBottom: 4 }}>
                   {label}
                 </label>
                 <input
@@ -604,15 +692,17 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   value={localStyles[key] ?? ''}
                   placeholder="—"
                   onChange={(e) => handleNumericStyleChange(key, e.target.value)}
+                  className="zelune-input tabular-nums"
                   style={{
                     width: '100%',
-                    backgroundColor: '#0B0D12',
-                    border: '1px solid #262E40',
+                    backgroundColor: 'var(--studio-canvas-bg)',
+                    border: '1px solid var(--studio-border-subtle)',
                     borderRadius: 6,
-                    padding: '6px 8px',
+                    paddingLeft: 8,
+                    paddingRight: 8,
                     color: '#F8FAFC',
                     fontSize: 12,
-                    fontFamily: 'JetBrains Mono, monospace',
+                    fontFamily: 'var(--font-mono)',
                   }}
                 />
               </div>
@@ -620,10 +710,11 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           </div>
         </section>
 
-        {/* SECTION 5: Tier-2 Antigravity Structural Refactor Button */}
+        {/* SECTION 5: Tier-2 Antigravity Structural Refactor Button (No purple-gradient slop) */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button
             type="button"
+            className="zelune-interactive"
             onClick={() => dialogRef.current?.showModal()}
             style={{
               display: 'flex',
@@ -631,36 +722,48 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               justifyContent: 'center',
               gap: 8,
               width: '100%',
-              padding: '11px 14px',
-              background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
-              color: '#FFFFFF',
-              border: 'none',
-              borderRadius: 10,
-              fontSize: 13,
+              padding: '10px 14px',
+              backgroundColor: 'var(--studio-surface-3)',
+              color: '#F8FAFC',
+              border: '1px solid rgba(56, 189, 248, 0.42)',
+              borderRadius: 8,
+              fontSize: 12.5,
               fontWeight: 600,
               cursor: 'pointer',
-              boxShadow: '0 8px 20px -6px rgba(79, 70, 229, 0.6)',
+              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 20px -8px rgba(0, 0, 0, 0.6)',
             }}
           >
-            <Sparkles size={15} />
+            <Sparkles size={14} color="#38BDF8" />
             <span>Ask Antigravity to Refactor</span>
           </button>
         </section>
 
         {/* SECTION 6: Live JSX Code Snippet */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.05em' }}>
-            <Code2 size={13} color="#6366F1" />
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 10.5,
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 600,
+              color: 'var(--studio-text-muted)',
+              letterSpacing: '0.06em',
+            }}
+          >
+            <Code2 size={12} color="#38BDF8" />
             <span>LIVE JSX AST NODE</span>
           </div>
           <pre
+            className="zelune-scroller"
             style={{
-              backgroundColor: '#090B10',
-              border: '1px solid #1E2433',
-              borderRadius: 8,
+              backgroundColor: 'var(--studio-canvas-bg)',
+              border: '1px solid var(--studio-border-hairline)',
+              borderRadius: 7,
               padding: 10,
               fontSize: 11,
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: 'var(--font-mono)',
               color: '#CBD5E1',
               overflowX: 'auto',
               margin: 0,
@@ -672,7 +775,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         </section>
       </div>
 
-      {/* Native Modal Dialog with closedby="any" + Modern Web Guidance Scroll Containment */}
+      {/* Native Modal Dialog with closedby="any" + Emil Kowalski --ease-out-expo entry choreography */}
       <dialog
         ref={dialogRef}
         closedby="any"
@@ -681,73 +784,84 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
       >
         <div
           style={{
-            backgroundColor: '#11141D',
+            backgroundColor: 'var(--studio-surface-1)',
             color: '#F8FAFC',
-            border: '1px solid #312E81',
-            borderRadius: 16,
-            padding: 24,
+            border: '1px solid var(--studio-border-strong)',
+            borderRadius: 14,
+            padding: 22,
             width: 480,
             maxWidth: '92vw',
             display: 'flex',
             flexDirection: 'column',
-            gap: 16,
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.85)',
+            gap: 15,
+            boxShadow: '0 28px 60px -12px rgba(0, 0, 0, 0.85)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Sparkles size={18} color="#818CF8" />
-              <h2 id="agyDialogTitle" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
-                Ask Google Antigravity — Structural Edit
+              <Sparkles size={16} color="#38BDF8" />
+              <h2
+                id="agyDialogTitle"
+                className="balance-heading"
+                style={{ margin: 0, fontSize: 15, fontWeight: 700, letterSpacing: '-0.015em' }}
+              >
+                Ask Google Antigravity — Structural AST Edit
               </h2>
             </div>
             <button
               type="button"
+              className="zelune-interactive"
               onClick={() => dialogRef.current?.close()}
               style={{
                 background: 'transparent',
-                border: 'none',
+                border: '1px solid transparent',
+                borderRadius: 5,
                 color: '#94A3B8',
                 cursor: 'pointer',
+                padding: 4,
               }}
             >
-              <X size={18} />
+              <X size={16} />
             </button>
           </div>
 
-          <p style={{ margin: 0, fontSize: 13, color: '#94A3B8', lineHeight: 1.5 }}>
+          <p style={{ margin: 0, fontSize: 12.5, color: '#94A3B8', lineHeight: 1.55 }}>
             Describe the structural or stateful change you want for{' '}
-            <code style={{ color: '#A5B4FC' }}>&lt;{inspected.tagName}&gt;</code> in{' '}
-            <code style={{ color: '#A5B4FC' }}>{inspected.file}:{inspected.line}</code>.
+            <code style={{ color: '#38BDF8', fontFamily: 'var(--font-mono)' }}>&lt;{inspected.tagName}&gt;</code> in{' '}
+            <code className="tabular-nums" style={{ color: '#A5B4FC', fontFamily: 'var(--font-mono)' }}>
+              {inspected.file}:{inspected.line}
+            </code>
+            .
           </p>
 
           <textarea
             rows={3}
             value={agentInstruction}
             onChange={(e) => setAgentInstruction(e.target.value)}
-            placeholder="e.g., Turn this card into a swipeable horizontal carousel with 3 product items and animated badge..."
+            placeholder="e.g., Convert this spec grid into an asymmetric 2-column acoustic telemetry readout..."
             style={{
               width: '100%',
-              backgroundColor: '#0B0D12',
-              border: '1px solid #2E364F',
-              borderRadius: 10,
-              padding: 12,
+              backgroundColor: 'var(--studio-canvas-bg)',
+              border: '1px solid var(--studio-border-subtle)',
+              borderRadius: 8,
+              padding: 11,
               color: '#F8FAFC',
-              fontSize: 13,
-              fontFamily: 'Inter, sans-serif',
+              fontSize: 12.5,
+              fontFamily: 'var(--font-sans)',
             }}
           />
 
           <div
+            className="zelune-scroller"
             style={{
-              backgroundColor: '#090B10',
-              border: '1px solid #1E2433',
-              borderRadius: 8,
+              backgroundColor: 'var(--studio-canvas-bg)',
+              border: '1px solid var(--studio-border-hairline)',
+              borderRadius: 7,
               padding: 10,
               maxHeight: 150,
               overflowY: 'auto',
               fontSize: 11,
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: 'var(--font-mono)',
               color: '#94A3B8',
               whiteSpace: 'pre-wrap',
             }}
@@ -755,15 +869,16 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             {buildAntigravityPrompt()}
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button
               type="button"
+              className="zelune-interactive"
               onClick={() => dialogRef.current?.close()}
               style={{
-                padding: '8px 14px',
-                borderRadius: 8,
-                border: '1px solid #262E40',
-                backgroundColor: '#161B26',
+                padding: '8px 13px',
+                borderRadius: 7,
+                border: '1px solid var(--studio-border-subtle)',
+                backgroundColor: 'var(--studio-surface-2)',
                 color: '#CBD5E1',
                 fontSize: 12,
                 fontWeight: 600,
@@ -774,22 +889,23 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             </button>
             <button
               type="button"
+              className="zelune-interactive"
               onClick={handleCopyPrompt}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
-                padding: '8px 16px',
-                borderRadius: 8,
-                border: 'none',
-                backgroundColor: '#4F46E5',
-                color: '#FFFFFF',
+                padding: '8px 14px',
+                borderRadius: 7,
+                border: '1px solid rgba(56, 189, 248, 0.45)',
+                backgroundColor: 'var(--studio-surface-3)',
+                color: '#F8FAFC',
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: 'pointer',
               }}
             >
-              {copiedPrompt ? <Check size={14} /> : <Copy size={14} />}
+              {copiedPrompt ? <Check size={14} color="#34D399" /> : <Copy size={14} color="#38BDF8" />}
               <span>{copiedPrompt ? 'Copied Context for Antigravity!' : 'Copy Agent Prompt Context'}</span>
             </button>
           </div>

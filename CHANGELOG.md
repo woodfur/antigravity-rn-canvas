@@ -2,6 +2,16 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.2.0] - 2026-10-20
+
+### Added
+- **Design Craft & Product Truth System (`PRODUCT.md`, `DESIGN.md`)**: Established `pbakaus/impeccable` product truth and YAML-governed design tokens, `leonxlnx/taste-skill` dual-surface parametric dials (`Design Variance`, `Motion Intensity`, `Visual Density`), and `emilkowalski/skills` motion and touch ergonomics contracts.
+- **Interactive Taste Density Switcher (`src/canvas/CanvasApp.tsx`, `src/styles.css`)**: Added a live `Density 8/10 (Cockpit)` vs. `Density 5/10 (Comfort)` toggle using CSS `data-density` + `@container style(--density: ...)` reactive tokens.
+- **Physics-Inspired Camera Transitions & Micro-Interactions (`src/canvas/CanvasApp.tsx`, `src/canvas/ScreenArtboard.tsx`, `src/styles.css`)**: Added `--ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1)` camera interpolation for screen focus/fit actions (with a `0ms` direct-manipulation override during pointer drag/wheel zoom), `scale: 0.97` tactile press feedback, `<dialog>` entry choreography, and `tabular-nums` alignment across all coordinate and zoom readouts.
+
+### Changed
+- **Anti-Slop Visual Overhaul (`index.html`, `src/canvas/*`, `src/screens/*`)**: Replaced generic `Inter` typography with `Plus Jakarta Sans` + `JetBrains Mono`, removed cliché purple-to-cyan/violet button gradients in favor of tinted obsidian surfaces (`#08090C` / `#0D0F14` / `#13161E`) and `1px` hairlines, and replaced emoji card placeholders (`🎧`, `⌨️`) across the React Native reference screens with industrial hardware monograms (`CH-01`, `KS-75`) and `activeOpacity={0.78}` mobile touch ergonomics.
+
 ## [1.1.1] - 2026-10-20
 
 ### Changed

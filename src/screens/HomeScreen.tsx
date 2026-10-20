@@ -16,10 +16,11 @@ export default function HomeScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.topBar}>
         <View>
-          <Text style={styles.greetingLabel}>GOOD MORNING</Text>
-          <Text style={styles.headerTitle}>Discover Gear</Text>
+          <Text style={styles.greetingLabel}>CHRONOS ACOUSTIC DIVISION</Text>
+          <Text style={styles.headerTitle}>Reference Hardware</Text>
         </View>
         <TouchableOpacity
+          activeOpacity={0.78}
           style={styles.avatarButton}
           onPress={() => navigation.navigate('Profile')}
         >
@@ -28,16 +29,20 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.heroBanner}>
-        <Text style={styles.heroBadge}>NEW RELEASE</Text>
-        <Text style={styles.heroTitle}>Chronos Spatial Studio Headphones</Text>
+        <View style={styles.heroMetaRow}>
+          <Text style={styles.heroBadge}>SERIES 04 // BERYLLIUM</Text>
+          <Text style={styles.heroSerial}>48H DAC</Text>
+        </View>
+        <Text style={styles.heroTitle}>Chronos Spatial Studio Reference</Text>
         <Text style={styles.heroSubtitle}>
-          Lossless acoustic engineering with adaptive neural cancellation.
+          Planar-magnetic acoustic architecture with zero-latency DSP room calibration.
         </Text>
         <TouchableOpacity
+          activeOpacity={0.78}
           style={styles.heroCta}
           onPress={() => navigation.navigate('ProductDetail')}
         >
-          <Text style={styles.heroCtaText}>Explore Flagship — $349</Text>
+          <Text style={styles.heroCtaText}>Inspect Spec Sheet — $349</Text>
         </TouchableOpacity>
       </View>
 
@@ -45,6 +50,7 @@ export default function HomeScreen() {
         {(['Featured', 'Hardware', 'Audio'] as const).map((cat) => (
           <TouchableOpacity
             key={cat}
+            activeOpacity={0.78}
             style={activeTab === cat ? styles.categoryPillActive : styles.categoryPill}
             onPress={() => setActiveTab(cat)}
           >
@@ -61,29 +67,31 @@ export default function HomeScreen() {
 
       <View style={styles.productList}>
         <TouchableOpacity
+          activeOpacity={0.78}
           style={styles.productCard}
           onPress={() => navigation.navigate('ProductDetail')}
         >
           <View style={styles.productIconBox}>
-            <Text style={styles.productEmoji}>🎧</Text>
+            <Text style={styles.productMonogram}>CH-01</Text>
           </View>
           <View style={styles.productInfo}>
             <Text style={styles.productName}>Chronos Studio Pro</Text>
-            <Text style={styles.productMeta}>Titanium Matte · In Stock</Text>
+            <Text style={styles.productMeta}>45mm Beryllium · Titanium Matte</Text>
           </View>
           <Text style={styles.productPrice}>$349</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
+          activeOpacity={0.78}
           style={styles.productCard}
           onPress={() => navigation.navigate('Checkout')}
         >
           <View style={styles.productIconBoxAlt}>
-            <Text style={styles.productEmoji}>⌨️</Text>
+            <Text style={styles.productMonogramAlt}>KS-75</Text>
           </View>
           <View style={styles.productInfo}>
-            <Text style={styles.productName}>Keystone Low-Profile 75</Text>
-            <Text style={styles.productMeta}>Tactile Optical · Express Ship</Text>
+            <Text style={styles.productName}>Keystone Field Controller</Text>
+            <Text style={styles.productMeta}>CNC Aluminum · Optical Hall Switches</Text>
           </View>
           <Text style={styles.productPrice}>$219</Text>
         </TouchableOpacity>
@@ -95,7 +103,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#090D16',
+    backgroundColor: '#0A0B0E',
   },
   content: {
     padding: 20,
@@ -105,127 +113,159 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 6,
   },
   greetingLabel: {
-    color: '#6366F1',
-    fontSize: 11,
+    color: '#38BDF8',
+    fontSize: 10,
     fontWeight: '700',
+    letterSpacing: 1.1,
   },
   headerTitle: {
     color: '#F8FAFC',
     fontSize: 24,
     fontWeight: '700',
+    letterSpacing: -0.4,
+    marginTop: 2,
   },
   avatarButton: {
     width: 42,
     height: 42,
-    borderRadius: 21,
-    backgroundColor: '#1E293B',
+    borderRadius: 10,
+    backgroundColor: '#13161E',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#222836',
   },
   avatarButtonText: {
     color: '#F8FAFC',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   heroBanner: {
-    backgroundColor: '#312E81',
-    borderRadius: 20,
+    backgroundColor: '#11141C',
+    borderRadius: 16,
     padding: 20,
     gap: 10,
     borderWidth: 1,
-    borderColor: '#4F46E5',
+    borderColor: '#262D3D',
+  },
+  heroMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   heroBadge: {
-    color: '#A5B4FC',
-    fontSize: 11,
+    color: '#38BDF8',
+    fontSize: 10,
     fontWeight: '700',
+    letterSpacing: 1,
+  },
+  heroSerial: {
+    color: '#10B981',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
   },
   heroTitle: {
-    color: '#FFFFFF',
+    color: '#F8FAFC',
     fontSize: 22,
     fontWeight: '700',
+    letterSpacing: -0.3,
   },
   heroSubtitle: {
-    color: '#C7D2FE',
+    color: '#94A3B8',
     fontSize: 13,
+    lineHeight: 19,
   },
   heroCta: {
-    backgroundColor: '#4F46E5',
-    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 9,
     paddingVertical: 12,
     paddingHorizontal: 16,
     alignSelf: 'flex-start',
     marginTop: 6,
   },
   heroCtaText: {
-    color: '#FFFFFF',
+    color: '#08090C',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   categoryRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   categoryPillActive: {
-    backgroundColor: '#4F46E5',
+    backgroundColor: '#191D28',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 99,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#38BDF8',
   },
   categoryPill: {
-    backgroundColor: '#111827',
+    backgroundColor: '#11141C',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 99,
+    paddingVertical: 10,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: '#1E2433',
   },
   categoryTextActive: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
+    color: '#F8FAFC',
+    fontSize: 12,
+    fontWeight: '700',
   },
   categoryText: {
     color: '#94A3B8',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
   },
   productList: {
     gap: 12,
   },
   productCard: {
-    backgroundColor: '#111827',
-    borderRadius: 16,
+    backgroundColor: '#11141C',
+    borderRadius: 14,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: '#1E2433',
   },
   productIconBox: {
     width: 52,
     height: 52,
-    borderRadius: 14,
-    backgroundColor: '#1E1B4B',
+    borderRadius: 10,
+    backgroundColor: '#161A26',
+    borderWidth: 1,
+    borderColor: '#262D3D',
     alignItems: 'center',
     justifyContent: 'center',
   },
   productIconBoxAlt: {
     width: 52,
     height: 52,
-    borderRadius: 14,
-    backgroundColor: '#0F172A',
+    borderRadius: 10,
+    backgroundColor: '#131720',
+    borderWidth: 1,
+    borderColor: '#222836',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  productEmoji: {
-    fontSize: 22,
+  productMonogram: {
+    color: '#38BDF8',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  productMonogramAlt: {
+    color: '#10B981',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   productInfo: {
     flex: 1,
@@ -241,8 +281,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   productPrice: {
-    color: '#A5B4FC',
-    fontSize: 16,
+    color: '#F8FAFC',
+    fontSize: 15,
     fontWeight: '700',
   },
 });

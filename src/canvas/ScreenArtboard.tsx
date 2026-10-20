@@ -192,8 +192,8 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
   const borderColor = isHighlightedScreen
     ? '#10B981'
     : isActiveScreen
-      ? '#6366F1'
-      : '#262B38';
+      ? '#38BDF8'
+      : 'rgba(255, 255, 255, 0.09)';
 
   return (
     <div
@@ -211,7 +211,7 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
         onSelectScreen(screen.id);
       }}
     >
-      {/* Minimalist Figma-Style Artboard Title Header */}
+      {/* Minimalist Architectural Artboard Title Header */}
       <div
         onPointerDown={handleHeaderPointerDown}
         style={{
@@ -222,7 +222,7 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
           justifyContent: 'space-between',
           padding: '0 4px',
           cursor: isDraggingHeader ? 'grabbing' : 'grab',
-          color: isActiveScreen ? '#A5B4FC' : '#94A3B8',
+          color: isActiveScreen ? '#38BDF8' : '#94A3B8',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -231,7 +231,7 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
             style={{
               fontSize: 13,
               fontWeight: 600,
-              letterSpacing: '-0.01em',
+              letterSpacing: '-0.015em',
               color: isActiveScreen ? '#F8FAFC' : '#CBD5E1',
             }}
           >
@@ -240,7 +240,7 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
           <span
             style={{
               fontSize: 11,
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: 'var(--font-mono)',
               color: '#64748B',
             }}
           >
@@ -250,9 +250,10 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span
+            className="tabular-nums"
             style={{
-              fontSize: 11,
-              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: 10.5,
+              fontFamily: 'var(--font-mono)',
               color: '#64748B',
             }}
           >
@@ -260,6 +261,7 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
           </span>
           <button
             type="button"
+            className="zelune-interactive"
             onClick={(e) => {
               e.stopPropagation();
               onFocusScreen(screen.id);
@@ -272,8 +274,8 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
               width: 22,
               height: 22,
               borderRadius: 5,
-              border: '1px solid #262B38',
-              backgroundColor: '#131722',
+              border: '1px solid var(--studio-border-subtle)',
+              backgroundColor: 'var(--studio-surface-2)',
               color: '#94A3B8',
               cursor: 'pointer',
             }}
@@ -283,7 +285,7 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
         </div>
       </div>
 
-      {/* Pure Rectangular Screen Artboard (No Device Bezel/Frame) */}
+      {/* Pure Rectangular Screen Artboard (No Device Bezel/Frame, Soft Diffusion Shadows) */}
       <div
         ref={viewportRef}
         onPointerMoveCapture={handlePointerMoveCapture}
@@ -293,15 +295,16 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
           position: 'relative',
           width: position.width,
           height: position.height,
-          backgroundColor: '#090D16',
-          border: `1.5px solid ${borderColor}`,
-          borderRadius: 4,
+          backgroundColor: '#0A0B0E',
+          border: `1px solid ${borderColor}`,
+          borderRadius: 6,
           overflow: 'hidden',
           boxShadow: isHighlightedScreen
-            ? '0 0 0 4px rgba(16, 185, 129, 0.28), 0 24px 48px -12px rgba(0, 0, 0, 0.75)'
+            ? '0 0 0 3px rgba(16, 185, 129, 0.28), 0 28px 56px -14px rgba(0, 0, 0, 0.78)'
             : isActiveScreen
-              ? '0 0 0 3px rgba(99, 102, 241, 0.25), 0 24px 48px -12px rgba(0, 0, 0, 0.75)'
-              : '0 20px 40px -15px rgba(0, 0, 0, 0.65)',
+              ? '0 0 0 2px rgba(56, 189, 248, 0.22), 0 28px 56px -14px rgba(0, 0, 0, 0.78)'
+              : '0 22px 44px -15px rgba(0, 0, 0, 0.68)',
+          transition: 'border-color var(--duration-micro) var(--ease-out), box-shadow var(--duration-micro) var(--ease-out)',
           display: 'flex',
           flexDirection: 'column',
           cursor: mode === 'inspect' ? 'crosshair' : 'default',
@@ -318,7 +321,7 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
               flexDirection: 'column',
               justifyContent: 'center',
               gap: 10,
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: 'var(--font-mono)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#F87171', fontWeight: 700, fontSize: 13 }}>
@@ -351,19 +354,21 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
           hoverBox &&
           (!selectedBox || hoverBox.astPath !== selectedBox.astPath) && (
             <div
+              className="zelune-box-overlay"
               style={{
                 position: 'absolute',
                 top: hoverBox.top,
                 left: hoverBox.left,
                 width: hoverBox.width,
                 height: hoverBox.height,
-                border: '1.5px dashed #38BDF8',
+                border: '1px dashed #38BDF8',
                 backgroundColor: 'rgba(56, 189, 248, 0.06)',
                 pointerEvents: 'none',
                 zIndex: 40,
               }}
             >
               <span
+                className="tabular-nums"
                 style={{
                   position: 'absolute',
                   top: -19,
@@ -372,7 +377,7 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
                   color: '#FFFFFF',
                   fontSize: 10,
                   fontWeight: 600,
-                  fontFamily: 'JetBrains Mono, monospace',
+                  fontFamily: 'var(--font-mono)',
                   padding: '1px 5px',
                   borderRadius: 3,
                   whiteSpace: 'nowrap',
@@ -386,13 +391,14 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
         {/* Figma-style Active Selection Bounding Box */}
         {selectedBox && selectedElement?.screenId === screen.id && (
           <div
+            className="zelune-box-overlay"
             style={{
               position: 'absolute',
               top: selectedBox.top,
               left: selectedBox.left,
               width: selectedBox.width,
               height: selectedBox.height,
-              border: '2px solid #6366F1',
+              border: '1.5px solid #6366F1',
               backgroundColor: 'rgba(99, 102, 241, 0.08)',
               pointerEvents: 'none',
               zIndex: 45,
@@ -400,10 +406,10 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
           >
             {/* Corner resize handles aesthetic */}
             {[
-              { top: -4, left: -4 },
-              { top: -4, right: -4 },
-              { bottom: -4, left: -4 },
-              { bottom: -4, right: -4 },
+              { top: -3.5, left: -3.5 },
+              { top: -3.5, right: -3.5 },
+              { bottom: -3.5, left: -3.5 },
+              { bottom: -3.5, right: -3.5 },
             ].map((pos, idx) => (
               <span
                 key={idx}
@@ -419,6 +425,7 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
               />
             ))}
             <span
+              className="tabular-nums"
               style={{
                 position: 'absolute',
                 top: -21,
@@ -427,7 +434,7 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
                 color: '#FFFFFF',
                 fontSize: 10,
                 fontWeight: 700,
-                fontFamily: 'JetBrains Mono, monospace',
+                fontFamily: 'var(--font-mono)',
                 padding: '2px 6px',
                 borderRadius: 3,
                 whiteSpace: 'nowrap',

@@ -1,6 +1,6 @@
 {
   "name": "zelune",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": false,
   "type": "module",
   "description": "Zelune — Figma-style Multi-Screen React Native Visual Canvas & AST Sync MCP Server for Google Antigravity",
@@ -31,6 +31,8 @@
     "tsconfig.json",
     "plugin.json",
     "mcp_config.json",
+    "PRODUCT.md",
+    "DESIGN.md",
     "README.md",
     "CHANGELOG.md"
   ],

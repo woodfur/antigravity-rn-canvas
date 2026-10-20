@@ -17,47 +17,50 @@ export default function ProfileScreen() {
           <Text style={styles.avatarInitials}>AX</Text>
         </View>
         <Text style={styles.memberName}>Alex Mercer</Text>
-        <Text style={styles.memberTier}>Antigravity Pro Founding Member</Text>
+        <Text style={styles.memberTier}>LEAD ACOUSTIC ENGINEER · TIER 01</Text>
       </View>
 
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>14</Text>
-          <Text style={styles.statCaption}>Orders</Text>
+          <Text style={styles.statCaption}>UNITS</Text>
         </View>
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>4,820</Text>
-          <Text style={styles.statCaption}>Points</Text>
+          <Text style={styles.statCaption}>CREDITS</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>VIP</Text>
-          <Text style={styles.statCaption}>Tier</Text>
+          <Text style={styles.statNumber}>LAB</Text>
+          <Text style={styles.statCaption}>ACCESS</Text>
         </View>
       </View>
 
       <View style={styles.menuList}>
         <TouchableOpacity
+          activeOpacity={0.78}
           style={styles.menuItem}
           onPress={() => navigation.navigate('Home')}
         >
-          <Text style={styles.menuItemTitle}>Browse Hardware Store</Text>
+          <Text style={styles.menuItemTitle}>Reference Hardware Catalog</Text>
           <Text style={styles.menuItemArrow}>→</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
+          activeOpacity={0.78}
           style={styles.menuItem}
           onPress={() => navigation.navigate('Checkout')}
         >
-          <Text style={styles.menuItemTitle}>Active Cart & Express Pay</Text>
+          <Text style={styles.menuItemTitle}>Active Allocation &amp; Settlement</Text>
           <Text style={styles.menuItemArrow}>→</Text>
         </TouchableOpacity>
       </View>
 
       <TouchableOpacity
+        activeOpacity={0.78}
         style={styles.signOutButton}
         onPress={() => navigation.navigate('Login')}
       >
-        <Text style={styles.signOutText}>Sign Out of Account</Text>
+        <Text style={styles.signOutText}>Terminate Studio Session</Text>
       </TouchableOpacity>
     </View>
   );
@@ -66,95 +69,104 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#090D16',
+    backgroundColor: '#0A0B0E',
     padding: 20,
     justifyContent: 'space-between',
   },
   profileHeader: {
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 14,
     gap: 6,
   },
   avatarLarge: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#4F46E5',
+    width: 68,
+    height: 68,
+    borderRadius: 16,
+    backgroundColor: '#13161E',
+    borderWidth: 1,
+    borderColor: '#262D3D',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 6,
   },
   avatarInitials: {
-    color: '#FFFFFF',
-    fontSize: 24,
+    color: '#38BDF8',
+    fontSize: 22,
     fontWeight: '700',
+    letterSpacing: 1,
   },
   memberName: {
     color: '#F8FAFC',
     fontSize: 22,
     fontWeight: '700',
+    letterSpacing: -0.3,
   },
   memberTier: {
-    color: '#818CF8',
-    fontSize: 13,
-    fontWeight: '500',
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#111827',
-    borderRadius: 16,
+    backgroundColor: '#11141C',
+    borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: '#1E2433',
   },
   statNumber: {
     color: '#F8FAFC',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
   },
   statCaption: {
     color: '#64748B',
-    fontSize: 11,
-    marginTop: 2,
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginTop: 3,
   },
   menuList: {
     gap: 10,
   },
   menuItem: {
-    backgroundColor: '#111827',
-    borderRadius: 14,
+    backgroundColor: '#11141C',
+    borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 15,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: '#1E2433',
   },
   menuItemTitle: {
     color: '#E2E8F0',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   menuItemArrow: {
-    color: '#6366F1',
-    fontSize: 16,
+    color: '#38BDF8',
+    fontSize: 15,
     fontWeight: '700',
   },
   signOutButton: {
-    backgroundColor: '#1E293B',
-    borderRadius: 14,
+    backgroundColor: '#16131A',
+    borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#3B1D2A',
   },
   signOutText: {
-    color: '#F87171',
-    fontSize: 14,
+    color: '#FB7185',
+    fontSize: 13,
     fontWeight: '600',
   },
 });
