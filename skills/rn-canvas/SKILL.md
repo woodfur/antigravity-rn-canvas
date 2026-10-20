@@ -1,13 +1,13 @@
 ---
-name: rn-canvas
-description: Launch, inspect, and surgically patch React Native / Expo screens on the Figma-style multi-screen visual canvas. Activate when the user wants to view all mobile screens side-by-side, inspect element AST styles/copy, or visualize navigation flows.
+name: zelune
+description: Launch, inspect, and surgically patch React Native / Expo screens on the Zelune Figma-style multi-screen visual canvas. Activate when the user wants to view all mobile screens side-by-side, inspect element AST styles/copy, or visualize navigation flows via the Zelune MCP.
 ---
 
-# React Native Visual Canvas (`rn-canvas`)
+# Zelune — React Native Visual Canvas (`zelune`)
 
-Use this skill when working with React Native or Expo mobile applications in Google Antigravity to provide a live multi-screen Figma-style visual canvas synchronized with `.tsx` source files.
+Use this skill when working with React Native or Expo mobile applications in Google Antigravity to provide a live multi-screen Figma-style visual canvas synchronized with `.tsx` source files via the **Zelune** MCP server.
 
-## Available MCP Tools (`antigravity-rn-canvas-mcp`)
+## Available Zelune MCP Tools (`zelune`)
 
 1. **`list_canvas_screens`**
    - Lists all discovered React Native screens (`src/screens/`, `screens/`, or Expo Router `app/`), their JSX element counts, and outgoing navigation flow edges (`navigation.navigate` / `router.push`).
@@ -16,10 +16,10 @@ Use this skill when working with React Native or Expo mobile applications in Goo
 3. **`patch_screen_element`**
    - Surgically patches `{ file, astPath, text, styles }` directly in the `.tsx` source file while preserving comments, formatting, and dynamic expressions.
 
-## Launching the Browser Canvas
+## Launching the Zelune Browser Canvas
 
 To open the interactive browser studio for the active project:
 ```bash
-npx antigravity-rn-canvas --project /path/to/react-native-app
+npx zelune --project /path/to/react-native-app
 ```
 Then open `http://127.0.0.1:5173`.

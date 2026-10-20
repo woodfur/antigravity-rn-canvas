@@ -35,7 +35,7 @@ if (isMcpMode) {
   });
   child.on('exit', (code) => process.exit(code ?? 0));
 } else {
-  console.log(`\n🚀 Antigravity React Native Visual Canvas`);
+  console.log(`\n🚀 Zelune — React Native Visual Canvas & MCP`);
   console.log(`📂 Target Project: ${targetProject}`);
   console.log(`🌐 Studio URL:     http://127.0.0.1:${port}\n`);
 

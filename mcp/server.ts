@@ -18,8 +18,8 @@ const WORKSPACE_ROOT = path.resolve(__dirname, '..');
 
 const server = new Server(
   {
-    name: 'antigravity-rn-canvas-mcp',
-    version: '1.0.0',
+    name: 'zelune',
+    version: '1.1.0',
   },
   {
     capabilities: {

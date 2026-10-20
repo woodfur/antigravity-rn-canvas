@@ -442,10 +442,10 @@ export const CanvasApp: React.FC = () => {
           </div>
           <div>
             <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em' }}>
-              Antigravity Visual Canvas
+              Zelune Visual Canvas
             </div>
             <div style={{ fontSize: 11, color: '#64748B', fontFamily: 'JetBrains Mono, monospace' }}>
-              React Native Multi-Screen AST Studio · {screens.length} Screens Live
+              Zelune MCP · React Native AST Studio · {screens.length} Screens Live
             </div>
           </div>
         </div>

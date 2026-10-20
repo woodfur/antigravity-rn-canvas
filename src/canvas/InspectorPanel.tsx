@@ -211,7 +211,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             paddingTop: 12,
           }}
         >
-          MCP Server: <span style={{ color: '#34D399' }}>Ready (mcp/server.ts)</span>
+          MCP Server: <span style={{ color: '#34D399' }}>Zelune Ready (mcp/server.ts)</span>
         </div>
       </aside>
     );

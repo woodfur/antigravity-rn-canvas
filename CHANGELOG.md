@@ -1,11 +1,16 @@
 # Changelog
 
-All notable changes to the **Antigravity React Native Visual Canvas** project are documented in this file.
+All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
+
+## [1.1.1] - 2026-10-20
+
+### Changed
+- **Zelune MCP & Package Branding (`mcp/server.ts`, `mcp_config.json`, `plugin.json`, `package.json`, `src/canvas/`)**: Renamed the MCP server, CLI binary (`npx zelune`), plugin manifest, and canvas studio header to **Zelune** (`zelune`).
 
 ## [1.1.0] - 2026-10-20
 
 ### Added
-- **Universal CLI Entrypoint (`bin/cli.mjs`)**: Added `npx antigravity-rn-canvas` CLI binary supporting `--project /path/to/app`, `--port`, and `--mcp` flags, plus automatic screen discovery across `src/screens/`, `screens/`, and Expo Router `app/` directories.
+- **Universal CLI Entrypoint (`bin/cli.mjs`)**: Added CLI binary supporting `--project /path/to/app`, `--port`, and `--mcp` flags, plus automatic screen discovery across `src/screens/`, `screens/`, and Expo Router `app/` directories.
 - **Google Antigravity Plugin Bundle (`plugin.json`, `mcp_config.json`, `skills/rn-canvas/SKILL.md`, `rules/AGENTS.md`, `assets/logo.svg`)**: Packaged the workspace as a complete installable Antigravity Plugin and public npm package.
 
 ## [1.0.0] - 2026-10-20
