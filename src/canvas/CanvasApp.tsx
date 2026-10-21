@@ -627,11 +627,13 @@ export const CanvasApp: React.FC = () => {
           </div>
         </div>
 
-        {/* Center: Mode Switcher & Flow Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Center: Icon-First Mode Switcher & Flow Toggle (Reveals Label on Hover) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div
             style={{
               display: 'flex',
+              alignItems: 'center',
+              gap: 2,
               backgroundColor: 'var(--studio-canvas-bg)',
               padding: 3,
               borderRadius: 8,
@@ -640,13 +642,12 @@ export const CanvasApp: React.FC = () => {
           >
             <button
               type="button"
-              className="zelune-interactive"
+              className="zelune-interactive zelune-icon-reveal-btn"
               onClick={() => setMode('inspect')}
+              title="Inspect & Edit AST"
+              aria-label="Inspect & Edit AST"
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '5px 11px',
+                padding: '6px 9px',
                 borderRadius: 5,
                 border: mode === 'inspect' ? '1px solid rgba(56, 189, 248, 0.35)' : '1px solid transparent',
                 backgroundColor: mode === 'inspect' ? 'var(--studio-surface-3)' : 'transparent',
@@ -656,19 +657,18 @@ export const CanvasApp: React.FC = () => {
                 cursor: 'pointer',
               }}
             >
-              <MousePointer size={13} />
-              <span>Inspect &amp; Edit AST</span>
+              <MousePointer size={14} style={{ flexShrink: 0 }} />
+              <span className="zelune-reveal-label">Inspect &amp; Edit AST</span>
             </button>
 
             <button
               type="button"
-              className="zelune-interactive"
+              className="zelune-interactive zelune-icon-reveal-btn"
               onClick={() => setMode('interact')}
+              title="Interact & Navigate"
+              aria-label="Interact & Navigate"
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '5px 11px',
+                padding: '6px 9px',
                 borderRadius: 5,
                 border: mode === 'interact' ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid transparent',
                 backgroundColor: mode === 'interact' ? 'rgba(6, 78, 59, 0.45)' : 'transparent',
@@ -678,20 +678,19 @@ export const CanvasApp: React.FC = () => {
                 cursor: 'pointer',
               }}
             >
-              <Play size={13} />
-              <span>Interact &amp; Navigate</span>
+              <Play size={14} style={{ flexShrink: 0 }} />
+              <span className="zelune-reveal-label">Interact &amp; Navigate</span>
             </button>
           </div>
 
           <button
             type="button"
-            className="zelune-interactive"
+            className="zelune-interactive zelune-icon-reveal-btn"
             onClick={() => setShowFlows((prev) => !prev)}
+            title="Toggle Flow Graph"
+            aria-label="Toggle Flow Graph"
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 11px',
+              padding: '7px 9px',
               borderRadius: 7,
               border: `1px solid ${showFlows ? 'rgba(99, 102, 241, 0.45)' : 'var(--studio-border-subtle)'}`,
               backgroundColor: showFlows ? 'rgba(30, 27, 75, 0.55)' : 'var(--studio-surface-2)',
@@ -701,21 +700,19 @@ export const CanvasApp: React.FC = () => {
               cursor: 'pointer',
             }}
           >
-            <GitCommit size={13} />
-            <span>Flow Graph</span>
+            <GitCommit size={14} style={{ flexShrink: 0 }} />
+            <span className="zelune-reveal-label">Flow Graph</span>
           </button>
 
           {/* Leon Lin Taste-Skill Parametric Density Toggle */}
           <button
             type="button"
-            className="zelune-interactive tabular-nums"
+            className="zelune-interactive zelune-icon-reveal-btn tabular-nums"
             onClick={() => setDensity((d) => (d === 'compact' ? 'spacious' : 'compact'))}
-            title="Toggle Visual Density Dial (Cockpit 8/10 vs Comfort 5/10)"
+            title="Switch UI Spacing Density (Compact 8/10 vs Spacious 5/10)"
+            aria-label="Switch UI Spacing Density"
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 10px',
+              padding: '7px 9px',
               borderRadius: 7,
               border: '1px solid var(--studio-border-subtle)',
               backgroundColor: 'var(--studio-surface-2)',
@@ -726,8 +723,10 @@ export const CanvasApp: React.FC = () => {
               cursor: 'pointer',
             }}
           >
-            <SlidersHorizontal size={12} color="#38BDF8" />
-            <span>{density === 'compact' ? 'Density 8/10' : 'Density 5/10'}</span>
+            <SlidersHorizontal size={13} color="#38BDF8" style={{ flexShrink: 0 }} />
+            <span className="zelune-reveal-label">
+              {density === 'compact' ? 'Compact UI (8/10)' : 'Spacious UI (5/10)'}
+            </span>
           </button>
         </div>
 
@@ -836,14 +835,12 @@ export const CanvasApp: React.FC = () => {
 
           <button
             type="button"
-            className="zelune-interactive"
+            className="zelune-interactive zelune-icon-reveal-btn"
             onClick={handleFitAllScreens}
             title="Fit All Screens in Viewport"
+            aria-label="Fit All Screens in Viewport"
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 5,
-              padding: '6px 9px',
+              padding: '6px 8px',
               borderRadius: 6,
               border: '1px solid var(--studio-border-subtle)',
               backgroundColor: 'var(--studio-surface-2)',
@@ -853,20 +850,18 @@ export const CanvasApp: React.FC = () => {
               cursor: 'pointer',
             }}
           >
-            <Maximize size={12} />
-            <span>Fit</span>
+            <Maximize size={13} style={{ flexShrink: 0 }} />
+            <span className="zelune-reveal-label">Fit</span>
           </button>
 
           <button
             type="button"
-            className="zelune-interactive"
+            className="zelune-interactive zelune-icon-reveal-btn"
             onClick={handleResetGridLayout}
             title="Auto-Arrange Clean Artboard Grid"
+            aria-label="Auto-Arrange Clean Artboard Grid"
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 5,
-              padding: '6px 9px',
+              padding: '6px 8px',
               borderRadius: 6,
               border: '1px solid var(--studio-border-subtle)',
               backgroundColor: 'var(--studio-surface-2)',
@@ -876,8 +871,8 @@ export const CanvasApp: React.FC = () => {
               cursor: 'pointer',
             }}
           >
-            <LayoutGrid size={12} />
-            <span>Grid</span>
+            <LayoutGrid size={13} style={{ flexShrink: 0 }} />
+            <span className="zelune-reveal-label">Grid</span>
           </button>
 
           <div style={{ width: 1, height: 20, backgroundColor: 'var(--studio-border-subtle)', margin: '0 3px' }} />
