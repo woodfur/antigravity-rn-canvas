@@ -7,6 +7,7 @@ All notable changes to the **Zelune — React Native Visual Canvas & MCP** proje
 ### Added
 - **One-Command Project Installer (`zelune init` in `bin/cli.mjs`)**: Running `zelune init` inside any React Native or Expo repository automatically detects its screens directory (`src/screens/`, `screens/`, `app/`, `src/app/`), adds `"canvas": "zelune"` to `package.json`, configures the `zelune` MCP server in `mcp_config.json`, installs the AI agent skill to `.agents/skills/zelune/SKILL.md`, creates starter `DESIGN.md` and `PRODUCT.md` governance docs if missing, and adds `.canvas-layout.json` to `.gitignore`.
 - **Smart Zero-Flag CLI Launch (`bin/cli.mjs`)**: Running `zelune` with no flags automatically probes both IPv4 (`127.0.0.1`) and IPv6 (`::1`) interfaces starting at port `5173` to select a conflict-free port and opens the browser automatically via `--open` (disable with `--no-open`).
+- **Public npm Registry Metadata (`package.json`)**: Added `license`, `repository`, `homepage`, and `bugs` fields for publishing `zelune` to the public npm registry.
 
 ## [1.3.0] - 2026-10-21
 

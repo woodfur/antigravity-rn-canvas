@@ -2,8 +2,17 @@
   "name": "zelune",
   "version": "1.4.0",
   "private": false,
+  "license": "MIT",
   "type": "module",
   "description": "Zelune — Figma-style Multi-Screen React Native Visual Canvas & AST Sync MCP Server for Google Antigravity",
+  "homepage": "https://github.com/woodfur/antigravity-rn-canvas#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/woodfur/antigravity-rn-canvas.git"
+  },
+  "bugs": {
+    "url": "https://github.com/woodfur/antigravity-rn-canvas/issues"
+  },
   "keywords": [
     "zelune",
     "google-antigravity",
