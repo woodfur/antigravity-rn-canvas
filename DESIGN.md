@@ -9,7 +9,7 @@ taste_dials:
   studio_chrome:
     design_variance: 2
     motion_intensity: 6
-    visual_density: 8
+    visual_density: 5
   mobile_reference_screens:
     design_variance: 7
     motion_intensity: 7

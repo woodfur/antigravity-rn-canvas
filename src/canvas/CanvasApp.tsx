@@ -11,7 +11,6 @@ import {
   LayoutGrid,
   Layers,
   RefreshCw,
-  SlidersHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -63,7 +62,6 @@ export const CanvasApp: React.FC = () => {
   const [layout, setLayout] = useState<ArtboardLayoutMap>({});
   const [mode, setMode] = useState<CanvasMode>('inspect');
   const [showFlows, setShowFlows] = useState<boolean>(true);
-  const [density, setDensity] = useState<'compact' | 'spacious'>('compact');
 
   // Collapsible Left (Screen Rail) & Right (AST Inspector) Panels
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState<boolean>(true);
@@ -541,7 +539,7 @@ export const CanvasApp: React.FC = () => {
   return (
     <div
       className="zelune-studio-root"
-      data-density={density}
+      data-density="spacious"
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -702,31 +700,6 @@ export const CanvasApp: React.FC = () => {
           >
             <GitCommit size={14} style={{ flexShrink: 0 }} />
             <span className="zelune-reveal-label">Flow Graph</span>
-          </button>
-
-          {/* Leon Lin Taste-Skill Parametric Density Toggle */}
-          <button
-            type="button"
-            className="zelune-interactive zelune-icon-reveal-btn tabular-nums"
-            onClick={() => setDensity((d) => (d === 'compact' ? 'spacious' : 'compact'))}
-            title="Switch UI Spacing Density (Compact 8/10 vs Spacious 5/10)"
-            aria-label="Switch UI Spacing Density"
-            style={{
-              padding: '7px 9px',
-              borderRadius: 7,
-              border: '1px solid var(--studio-border-subtle)',
-              backgroundColor: 'var(--studio-surface-2)',
-              color: 'var(--studio-text-secondary)',
-              fontSize: 11.5,
-              fontFamily: 'var(--font-mono)',
-              fontWeight: 500,
-              cursor: 'pointer',
-            }}
-          >
-            <SlidersHorizontal size={13} color="#38BDF8" style={{ flexShrink: 0 }} />
-            <span className="zelune-reveal-label">
-              {density === 'compact' ? 'Compact UI (8/10)' : 'Spacious UI (5/10)'}
-            </span>
           </button>
         </div>
 
