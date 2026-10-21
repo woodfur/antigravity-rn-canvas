@@ -2,6 +2,21 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.5.1] - 2026-10-21
+
+### Fixed
+- **Nested Mobile Project / Monorepo Auto-Discovery (`src/server/astEngine.ts`, `bin/cli.mjs`, `vite.config.ts`)**: Added `findMobileAppRoot` so running `zelune` or `zelune init` in a top-level parent or monorepo directory automatically scans up to 2 levels deep (`mobile/`, `apps/mobile/`, etc.) to locate the React Native / Expo app directory (`app.json`, `package.json`, and `.tsx`/`.jsx` screens).
+- **Local `npm install zelune` (`node_modules/zelune`) Execution & Dependency Resolution (`vite.config.ts`, `bin/cli.mjs`)**: Configured `esbuild: { include: /\.(tsx|ts|jsx)$/, exclude: [] }` so Vite transpiles Zelune's studio `.tsx` files even when installed inside `node_modules/zelune`, resolved `react`, `react-dom`, `react-native-web`, and `lucide-react` via `createRequire(import.meta.url)` so external mobile screens do not need `react-native-web` installed locally, and resolved `vite/bin/vite.js` directly in `bin/cli.mjs`.
+
+## [1.5.0] - 2026-10-21
+
+### Added
+- **On-Canvas Direct Manipulation Suite (`src/canvas/ScreenArtboard.tsx`, `src/canvas/CanvasApp.tsx`, `src/server/astEngine.ts`, `src/server/apiMiddleware.ts`, `mcp/server.ts`)**:
+  - **8-Point Resize Handles**: Added corner and edge resize handles (`nw`, `n`, `ne`, `e`, `se`, `s`, `sw`, `w`) on selected artboard elements with 60fps direct DOM preview, live `W × H` HUD badge, automatic `'100%'` responsive width snapping at parent edges, and surgical write-back to `StyleSheet.create`.
+  - **Inner Corner `borderRadius` Handles**: Added 4 inset circular corner radius handles on selected elements to interactively round corners on the artboard.
+  - **Figma Auto-Layout Hybrid Move & Reorder (`reorderElement` / `POST /api/reorder` / `reorder_screen_element`)**: Added drag-and-drop Flexbox sibling reordering with a glowing insertion line indicator, 1-click `↑`/`↓` reorder buttons on the selection pill, a 1-click **Pin/Float (`position: 'absolute'`)** toggle (plus `Option/Alt + Drag` freeform X/Y dragging with artboard center snap guides and `Shift + Drag` margin nudging), and keyboard arrow key (`↑ ↓ ← →` / `Shift + Arrow`) nudging.
+  - **Double-Click Inline `<Text>` Editing**: Added direct on-artboard inline text editing when double-clicking any editable `<Text>` node (or clicking the `Type` icon on the selection toolbar).
+
 ## [1.4.1] - 2026-10-21
 
 ### Fixed

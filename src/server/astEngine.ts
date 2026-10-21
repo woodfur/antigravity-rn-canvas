@@ -55,6 +55,14 @@ export interface PatchPayload {
   styles?: Record<string, StyleValue | null | undefined>;
 }
 
+export interface ReorderPayload {
+  file: string;
+  astPath: string;
+  targetAstPath?: string;
+  placement?: 'before' | 'after';
+  direction?: 'up' | 'down';
+}
+
 interface HistoryEntry {
   file: string;
   previousContent: string;
@@ -80,29 +88,188 @@ function withFileLock<T>(filePath: string, task: () => Promise<T>): Promise<T> {
   return next;
 }
 
+const SCREEN_DIR_CANDIDATES = ['src/screens', 'screens', 'app', 'src/app'] as const;
+const IGNORED_SCAN_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.next',
+  '.expo',
+  '.turbo',
+  'ios',
+  'android',
+  'vendor',
+  'coverage',
+  '.agents',
+  '.gemini',
+]);
+
+function countScreenFilesInDirectory(screensDir: string, maxDepth = 4): number {
+  let count = 0;
+
+  function walk(curr: string, depth: number) {
+    if (depth > maxDepth) return;
+    let entries: fsSync.Dirent[] = [];
+    try {
+      entries = fsSync.readdirSync(curr, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      if (entry.isDirectory()) {
+        if (
+          entry.name === 'node_modules' ||
+          entry.name === '__tests__' ||
+          entry.name === 'components'
+        ) {
+          continue;
+        }
+        walk(path.join(curr, entry.name), depth + 1);
+      } else if (entry.isFile()) {
+        const f = entry.name;
+        if (f.startsWith('_') || f.startsWith('+')) continue;
+        if (f === 'index.ts' || f === 'index.js') continue;
+        if (f.includes('.test.') || f.includes('.spec.') || f.endsWith('.d.ts')) continue;
+        if (f.endsWith('.tsx') || f.endsWith('.jsx')) {
+          count++;
+        }
+      }
+    }
+  }
+
+  walk(screensDir, 0);
+  return count;
+}
+
+function hasDirectScreenFiles(dirPath: string): { found: boolean; screenCount: number } {
+  for (const rel of SCREEN_DIR_CANDIDATES) {
+    const full = path.join(dirPath, rel);
+    try {
+      if (fsSync.existsSync(full) && fsSync.statSync(full).isDirectory()) {
+        const count = countScreenFilesInDirectory(full);
+        if (count > 0) {
+          return { found: true, screenCount: count };
+        }
+      }
+    } catch {
+      // Ignore unreadable directories
+    }
+  }
+  return { found: false, screenCount: 0 };
+}
+
+function scoreMobileCandidate(dirPath: string, screenCount: number): number {
+  let score = screenCount;
+  const folderName = path.basename(dirPath).toLowerCase();
+  if (/mobile|native|expo|app|client/.test(folderName)) {
+    score += 10;
+  }
+  if (fsSync.existsSync(path.join(dirPath, 'app.json')) || fsSync.existsSync(path.join(dirPath, 'eas.json'))) {
+    score += 25;
+  }
+  try {
+    const pkgPath = path.join(dirPath, 'package.json');
+    if (fsSync.existsSync(pkgPath)) {
+      const pkgRaw = fsSync.readFileSync(pkgPath, 'utf-8');
+      if (pkgRaw.includes('"react-native"') || pkgRaw.includes('"expo"')) {
+        score += 20;
+      }
+    }
+  } catch {
+    // Ignore malformed package.json
+  }
+  return score;
+}
+
 /**
- * Resolves the active target project root (supports ANTIGRAVITY_TARGET_PROJECT for external projects).
+ * Automatically locates the React Native / Expo mobile project root even when invoked
+ * from a top-level monorepo or parent workspace folder (e.g., containing `mobile/` or `apps/mobile/`).
+ */
+export function findMobileAppRoot(rawRoot: string): string {
+  const normalizedRoot = path.resolve(rawRoot);
+  if (!fsSync.existsSync(normalizedRoot)) {
+    return normalizedRoot;
+  }
+
+  // 1. Check if rawRoot itself directly contains React Native / Expo screens
+  const direct = hasDirectScreenFiles(normalizedRoot);
+  if (direct.found) {
+    return normalizedRoot;
+  }
+
+  // 2. Scan up to 2 levels of subdirectories for a nested mobile app
+  let bestCandidate: string | null = null;
+  let bestScore = -1;
+
+  function scanSubdirs(parentDir: string, depth: number) {
+    if (depth > 2) return;
+    let entries: fsSync.Dirent[] = [];
+    try {
+      entries = fsSync.readdirSync(parentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+      if (IGNORED_SCAN_DIRS.has(entry.name)) continue;
+
+      const subPath = path.join(parentDir, entry.name);
+      const check = hasDirectScreenFiles(subPath);
+      if (check.found) {
+        const score = scoreMobileCandidate(subPath, check.screenCount);
+        if (score > bestScore) {
+          bestScore = score;
+          bestCandidate = subPath;
+        }
+      } else if (depth < 2) {
+        scanSubdirs(subPath, depth + 1);
+      }
+    }
+  }
+
+  scanSubdirs(normalizedRoot, 1);
+  return bestCandidate ?? normalizedRoot;
+}
+
+/**
+ * Resolves the active target project root (supports ANTIGRAVITY_TARGET_PROJECT and nested mobile folders).
  */
 export function getActiveProjectRoot(fallbackRoot: string): string {
   const envTarget = process.env.ANTIGRAVITY_TARGET_PROJECT;
-  if (envTarget && fsSync.existsSync(envTarget)) {
-    return path.resolve(envTarget);
-  }
-  return path.resolve(fallbackRoot);
+  const baseRoot =
+    envTarget && fsSync.existsSync(envTarget)
+      ? path.resolve(envTarget)
+      : path.resolve(fallbackRoot);
+  return findMobileAppRoot(baseRoot);
 }
 
 /**
  * Finds the active screens directory inside a React Native / Expo project.
- * Checks `src/screens`, `screens`, and `app` (Expo Router).
+ * Checks `src/screens`, `screens`, `app` (Expo Router), and `src/app`.
  */
 export function resolveScreensDirectory(projectRoot: string): {
   dirPath: string;
   relDir: string;
 } {
-  const normalizedRoot = path.resolve(projectRoot);
-  const candidates = ['src/screens', 'screens', 'app', 'src/app'];
+  const normalizedRoot = findMobileAppRoot(projectRoot);
 
-  for (const rel of candidates) {
+  // Prefer a candidate directory that actually contains .tsx/.jsx screen files
+  for (const rel of SCREEN_DIR_CANDIDATES) {
+    const full = path.join(normalizedRoot, rel);
+    if (
+      fsSync.existsSync(full) &&
+      fsSync.statSync(full).isDirectory() &&
+      countScreenFilesInDirectory(full) > 0
+    ) {
+      return { dirPath: full, relDir: rel };
+    }
+  }
+
+  for (const rel of SCREEN_DIR_CANDIDATES) {
     const full = path.join(normalizedRoot, rel);
     if (fsSync.existsSync(full) && fsSync.statSync(full).isDirectory()) {
       return { dirPath: full, relDir: rel };
@@ -861,6 +1028,184 @@ export async function patchElement(
     const updatedElement = await inspectElement(workspaceRoot, {
       file: payload.file,
       astPath: payload.astPath,
+    });
+
+    return {
+      element: updatedElement,
+      undoAvailable: undoStack.length,
+      redoAvailable: redoStack.length,
+    };
+  });
+}
+
+/**
+ * Surgically reorders a JSXElement among its Flexbox siblings in the `.tsx` AST.
+ * Supports either explicit target sibling (`targetAstPath` + `placement: 'before' | 'after'`)
+ * or relative movement (`direction: 'up' | 'down'`).
+ */
+export async function reorderElement(
+  workspaceRoot: string,
+  payload: ReorderPayload
+): Promise<{
+  element: InspectedElement;
+  undoAvailable: number;
+  redoAvailable: number;
+}> {
+  const fullPath = resolveSafeScreenPath(workspaceRoot, payload.file);
+
+  return withFileLock(fullPath, async () => {
+    const previousContent = await fs.readFile(fullPath, 'utf-8');
+    const ast = parse(previousContent, {
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
+    });
+
+    interface IndexedElementInfo {
+      index: number;
+      element: t.JSXElement;
+      parent: t.JSXElement | t.JSXFragment | null;
+    }
+
+    const byIndex = new Map<number, IndexedElementInfo>();
+    const parentByElement = new Map<t.JSXElement, t.JSXElement | t.JSXFragment | null>();
+    let currentIndex = 0;
+
+    traverse(ast, {
+      JSXOpeningElement(nodePath) {
+        const tagName = getJsxTagName(nodePath.node.name);
+        if (tagName === 'Fragment' || tagName === 'React.Fragment' || tagName === '') {
+          return;
+        }
+        const idx = currentIndex++;
+        const jsxElPath = nodePath.parentPath;
+        if (!jsxElPath.isJSXElement()) return;
+
+        const element = jsxElPath.node;
+        const parentNode = jsxElPath.parentPath?.node;
+        const parent =
+          t.isJSXElement(parentNode) || t.isJSXFragment(parentNode) ? parentNode : null;
+
+        byIndex.set(idx, { index: idx, element, parent });
+        parentByElement.set(element, parent);
+      },
+    });
+
+    const sourceIdx = Number.parseInt(payload.astPath, 10);
+    const sourceInfo = byIndex.get(sourceIdx);
+    if (!sourceInfo || !sourceInfo.parent) {
+      throw new Error(`Element at astPath=${payload.astPath} cannot be reordered (no JSX parent container).`);
+    }
+
+    const parentContainer = sourceInfo.parent;
+    const sourceElement = sourceInfo.element;
+
+    const jsxSiblings = parentContainer.children.filter((c): c is t.JSXElement =>
+      t.isJSXElement(c)
+    );
+    if (jsxSiblings.length < 2) {
+      throw new Error('Element has no sibling elements inside its parent container to reorder with.');
+    }
+
+    let targetSibling: t.JSXElement | null = null;
+    let placement: 'before' | 'after' = payload.placement === 'after' ? 'after' : 'before';
+
+    if (payload.direction === 'up' || payload.direction === 'down') {
+      const currPos = jsxSiblings.indexOf(sourceElement);
+      if (currPos === -1) {
+        throw new Error('Could not locate element inside parent children list.');
+      }
+      if (payload.direction === 'up') {
+        if (currPos === 0) {
+          throw new Error('Element is already first in its container.');
+        }
+        targetSibling = jsxSiblings[currPos - 1];
+        placement = 'before';
+      } else {
+        if (currPos >= jsxSiblings.length - 1) {
+          throw new Error('Element is already last in its container.');
+        }
+        targetSibling = jsxSiblings[currPos + 1];
+        placement = 'after';
+      }
+    } else if (payload.targetAstPath !== undefined) {
+      const targetIdx = Number.parseInt(payload.targetAstPath, 10);
+      const rawTargetInfo = byIndex.get(targetIdx);
+      if (!rawTargetInfo) {
+        throw new Error(`Target sibling at astPath=${payload.targetAstPath} not found.`);
+      }
+
+      // Walk up from rawTargetInfo.element until we find the direct child of parentContainer
+      let candidate: t.JSXElement | null = rawTargetInfo.element;
+      while (candidate && parentByElement.get(candidate) !== parentContainer) {
+        const p = parentByElement.get(candidate);
+        candidate = p && t.isJSXElement(p) ? p : null;
+      }
+      if (!candidate || candidate === sourceElement) {
+        throw new Error('Target drop element is not a sibling inside the same Flexbox container.');
+      }
+      targetSibling = candidate;
+    }
+
+    if (!targetSibling || targetSibling === sourceElement) {
+      throw new Error('Invalid reorder target sibling.');
+    }
+
+    // Rebuild parentContainer.children preserving non-whitespace nodes in the new order
+    const meaningfulChildren = parentContainer.children.filter(
+      (child) => !(t.isJSXText(child) && child.value.trim() === '')
+    );
+
+    const withoutSource = meaningfulChildren.filter((child) => child !== sourceElement);
+    const targetPos = withoutSource.indexOf(targetSibling);
+    if (targetPos === -1) {
+      throw new Error('Target sibling not found in parent children.');
+    }
+
+    const insertIdx = placement === 'after' ? targetPos + 1 : targetPos;
+    withoutSource.splice(insertIdx, 0, sourceElement);
+    parentContainer.children = withoutSource;
+
+    // Re-index the mutated AST to find the updated pre-order astPath of sourceElement
+    let newSourceAstPath = payload.astPath;
+    let reindexCounter = 0;
+    traverse(ast, {
+      JSXOpeningElement(nodePath) {
+        const tagName = getJsxTagName(nodePath.node.name);
+        if (tagName === 'Fragment' || tagName === 'React.Fragment' || tagName === '') {
+          return;
+        }
+        const idx = reindexCounter++;
+        if (nodePath.parentPath.isJSXElement() && nodePath.parentPath.node === sourceElement) {
+          newSourceAstPath = String(idx);
+        }
+      },
+    });
+
+    const output = generate(ast, {
+      retainLines: false,
+      comments: true,
+      jsescOption: { minimal: true },
+    });
+
+    const nextContent = output.code + '\n';
+    if (nextContent !== previousContent) {
+      await fs.writeFile(fullPath, nextContent, 'utf-8');
+      undoStack.push({
+        file: payload.file,
+        previousContent,
+        nextContent,
+        description: `Reordered ${getJsxTagName(sourceElement.openingElement.name)} in ${path.basename(payload.file)}`,
+        timestamp: Date.now(),
+      });
+      if (undoStack.length > MAX_HISTORY) {
+        undoStack.shift();
+      }
+      redoStack.length = 0;
+    }
+
+    const updatedElement = await inspectElement(workspaceRoot, {
+      file: payload.file,
+      astPath: newSourceAstPath,
     });
 
     return {

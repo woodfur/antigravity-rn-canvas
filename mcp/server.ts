@@ -10,6 +10,7 @@ import {
   discoverScreens,
   inspectElement,
   patchElement,
+  reorderElement,
   type StyleValue,
 } from '../src/server/astEngine.js';
 
@@ -19,7 +20,7 @@ const WORKSPACE_ROOT = path.resolve(__dirname, '..');
 const server = new Server(
   {
     name: 'zelune',
-    version: '1.3.0',
+    version: '1.5.0',
   },
   {
     capabilities: {
@@ -86,6 +87,39 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['file', 'astPath'],
         },
       },
+      {
+        name: 'reorder_screen_element',
+        description:
+          'Surgically reorders a React Native JSX element among its Flexbox siblings in the .tsx AST.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file: {
+              type: 'string',
+              description: 'Relative path to the screen file (e.g. src/screens/HomeScreen.tsx)',
+            },
+            astPath: {
+              type: 'string',
+              description: 'Preorder AST index of the JSX element to move',
+            },
+            direction: {
+              type: 'string',
+              enum: ['up', 'down'],
+              description: 'Optional relative direction ("up" or "down") among siblings',
+            },
+            targetAstPath: {
+              type: 'string',
+              description: 'Optional AST index of the sibling to place before/after',
+            },
+            placement: {
+              type: 'string',
+              enum: ['before', 'after'],
+              description: 'Whether to insert before or after targetAstPath',
+            },
+          },
+          required: ['file', 'astPath'],
+        },
+      },
     ],
   };
 });
@@ -120,6 +154,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       astPath,
       text,
       styles,
+    });
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  }
+
+  if (name === 'reorder_screen_element') {
+    const file = String(args?.file ?? '');
+    const astPath = String(args?.astPath ?? '0');
+    const direction =
+      args?.direction === 'up' || args?.direction === 'down' ? args.direction : undefined;
+    const targetAstPath =
+      typeof args?.targetAstPath === 'string' ? args.targetAstPath : undefined;
+    const placement =
+      args?.placement === 'before' || args?.placement === 'after' ? args.placement : undefined;
+
+    const result = await reorderElement(WORKSPACE_ROOT, {
+      file,
+      astPath,
+      direction,
+      targetAstPath,
+      placement,
     });
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],

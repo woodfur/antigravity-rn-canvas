@@ -6,9 +6,11 @@ import { fileURLToPath } from 'node:url';
 import {
   discoverScreens,
   discoverScreenFilesSync,
+  findMobileAppRoot,
   normalizeRouteTarget,
   inspectElement,
   patchElement,
+  reorderElement,
   undoLastPatch,
   redoLastPatch,
   resolveSafeScreenPath,
@@ -268,5 +270,61 @@ describe('Antigravity React Native Visual Canvas — AST Engine', () => {
         Home: { x: 80, y: 70, width: 999999, height: 852 },
       })
     ).toThrow(/Out-of-bounds/);
+  });
+
+  it('reorders Flexbox sibling JSX elements in the AST and restores cleanly on undo', async () => {
+    const file = 'src/screens/LoginScreen.tsx';
+
+    // In LoginScreen.tsx, astPath '4' is the title <Text> ("Welcome back") and astPath '5' is the subtitle <Text>
+    const beforeTitle = await inspectElement(WORKSPACE_ROOT, { file, astPath: '4' });
+    expect(beforeTitle.textContent).toBe('Welcome back');
+
+    const reordered = await reorderElement(WORKSPACE_ROOT, {
+      file,
+      astPath: '4',
+      direction: 'down',
+    });
+
+    try {
+      // After moving down past its sibling, the moved title element now has astPath '5'
+      expect(reordered.element.astPath).toBe('5');
+      expect(reordered.element.textContent).toBe('Welcome back');
+    } finally {
+      await undoLastPatch(WORKSPACE_ROOT);
+    }
+
+    const restoredTitle = await inspectElement(WORKSPACE_ROOT, { file, astPath: '4' });
+    expect(restoredTitle.textContent).toBe('Welcome back');
+  });
+
+  it('automatically detects nested React Native / Expo apps when run from a top-level parent directory', async () => {
+    const tmpMonorepo = fs.mkdtempSync(path.join(os.tmpdir(), 'zelune-monorepo-test-'));
+    try {
+      const nestedMobile = path.join(tmpMonorepo, 'apps', 'mobile');
+      const nestedScreensDir = path.join(nestedMobile, 'src', 'screens');
+      fs.mkdirSync(nestedScreensDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(nestedMobile, 'app.json'),
+        JSON.stringify({ expo: { name: 'NestedMobileApp' } }, null, 2),
+        'utf8'
+      );
+      fs.writeFileSync(
+        path.join(nestedScreensDir, 'DashboardScreen.tsx'),
+        `import React from 'react';\nimport { View, Text } from 'react-native';\nexport default function DashboardScreen() { return <View><Text>Nested</Text></View>; }\n`,
+        'utf8'
+      );
+
+      const detectedRoot = findMobileAppRoot(tmpMonorepo);
+      expect(fs.realpathSync(detectedRoot)).toBe(fs.realpathSync(nestedMobile));
+
+      const discovered = await discoverScreens(tmpMonorepo);
+      expect(discovered.map((s) => s.id)).toContain('Dashboard');
+
+      const initRes = initProject(tmpMonorepo, WORKSPACE_ROOT);
+      expect(fs.realpathSync(initRes.mobileRoot)).toBe(fs.realpathSync(nestedMobile));
+      expect(initRes.screensDir).toBe('apps/mobile/src/screens');
+    } finally {
+      fs.rmSync(tmpMonorepo, { recursive: true, force: true });
+    }
   });
 });

@@ -1,12 +1,31 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const defaultPackageRoot = path.resolve(__dirname, '..');
+const requireFromCli = createRequire(import.meta.url);
+
+const SCREEN_DIR_CANDIDATES = ['src/screens', 'screens', 'app', 'src/app'];
+const IGNORED_SCAN_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.next',
+  '.expo',
+  '.turbo',
+  'ios',
+  'android',
+  'vendor',
+  'coverage',
+  '.agents',
+  '.gemini',
+]);
 
 function isHostPortFree(port, host) {
   return new Promise((resolve) => {
@@ -43,36 +62,175 @@ export async function findAvailablePort(startPort = 5173, maxAttempts = 25) {
   return startPort;
 }
 
+function countScreenFilesInDirectory(screensDir, maxDepth = 4) {
+  let count = 0;
+  function walk(curr, depth) {
+    if (depth > maxDepth) return;
+    let entries = [];
+    try {
+      entries = fs.readdirSync(curr, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      if (entry.isDirectory()) {
+        if (
+          entry.name === 'node_modules' ||
+          entry.name === '__tests__' ||
+          entry.name === 'components'
+        ) {
+          continue;
+        }
+        walk(path.join(curr, entry.name), depth + 1);
+      } else if (entry.isFile()) {
+        const f = entry.name;
+        if (f.startsWith('_') || f.startsWith('+')) continue;
+        if (f === 'index.ts' || f === 'index.js') continue;
+        if (f.includes('.test.') || f.includes('.spec.') || f.endsWith('.d.ts')) continue;
+        if (f.endsWith('.tsx') || f.endsWith('.jsx')) {
+          count++;
+        }
+      }
+    }
+  }
+  walk(screensDir, 0);
+  return count;
+}
+
+function hasDirectScreens(dirPath) {
+  for (const rel of SCREEN_DIR_CANDIDATES) {
+    const full = path.join(dirPath, rel);
+    try {
+      if (fs.existsSync(full) && fs.statSync(full).isDirectory()) {
+        const count = countScreenFilesInDirectory(full);
+        if (count > 0) {
+          return { found: true, relDir: rel, count };
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+  return { found: false, relDir: null, count: 0 };
+}
+
+function scoreMobileCandidate(dirPath, screenCount) {
+  let score = screenCount;
+  const folderName = path.basename(dirPath).toLowerCase();
+  if (/mobile|native|expo|app|client/.test(folderName)) {
+    score += 10;
+  }
+  if (fs.existsSync(path.join(dirPath, 'app.json')) || fs.existsSync(path.join(dirPath, 'eas.json'))) {
+    score += 25;
+  }
+  try {
+    const pkgPath = path.join(dirPath, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      const pkgRaw = fs.readFileSync(pkgPath, 'utf8');
+      if (pkgRaw.includes('"react-native"') || pkgRaw.includes('"expo"')) {
+        score += 20;
+      }
+    }
+  } catch {
+    // Ignore
+  }
+  return score;
+}
+
+export function findMobileAppRoot(rawRoot) {
+  const normalizedRoot = path.resolve(rawRoot);
+  if (!fs.existsSync(normalizedRoot)) {
+    return normalizedRoot;
+  }
+
+  const direct = hasDirectScreens(normalizedRoot);
+  if (direct.found) {
+    return normalizedRoot;
+  }
+
+  let bestCandidate = null;
+  let bestScore = -1;
+
+  function scanSubdirs(parentDir, depth) {
+    if (depth > 2) return;
+    let entries = [];
+    try {
+      entries = fs.readdirSync(parentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+      if (IGNORED_SCAN_DIRS.has(entry.name)) continue;
+
+      const subPath = path.join(parentDir, entry.name);
+      const check = hasDirectScreens(subPath);
+      if (check.found) {
+        const score = scoreMobileCandidate(subPath, check.count);
+        if (score > bestScore) {
+          bestScore = score;
+          bestCandidate = subPath;
+        }
+      } else if (depth < 2) {
+        scanSubdirs(subPath, depth + 1);
+      }
+    }
+  }
+
+  scanSubdirs(normalizedRoot, 1);
+  return bestCandidate ?? normalizedRoot;
+}
+
 function detectScreensDirectory(targetProject) {
-  const candidates = ['src/screens', 'screens', 'app', 'src/app'];
-  for (const rel of candidates) {
-    const full = path.join(targetProject, rel);
+  const mobileRoot = findMobileAppRoot(targetProject);
+  // First check directories with .tsx/.jsx screen files
+  for (const rel of SCREEN_DIR_CANDIDATES) {
+    const full = path.join(mobileRoot, rel);
+    if (fs.existsSync(full) && fs.statSync(full).isDirectory() && countScreenFilesInDirectory(full) > 0) {
+      const relFromTarget = path.relative(targetProject, full).replace(/\\/g, '/');
+      return relFromTarget || rel;
+    }
+  }
+  // Fallback to existing empty candidate directory (e.g. newly initialized project)
+  for (const rel of SCREEN_DIR_CANDIDATES) {
+    const full = path.join(mobileRoot, rel);
     if (fs.existsSync(full) && fs.statSync(full).isDirectory()) {
-      return rel;
+      const relFromTarget = path.relative(targetProject, full).replace(/\\/g, '/');
+      return relFromTarget || rel;
     }
   }
   return null;
 }
 
+function addCanvasScriptToPackageJson(dirPath) {
+  const pkgJsonPath = path.join(dirPath, 'package.json');
+  if (!fs.existsSync(pkgJsonPath)) return false;
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+    pkg.scripts = pkg.scripts || {};
+    if (pkg.name !== 'zelune' && !pkg.scripts.canvas) {
+      pkg.scripts.canvas = 'zelune';
+      fs.writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+      return true;
+    }
+  } catch {
+    // Ignore malformed package.json
+  }
+  return false;
+}
+
 export function initProject(targetProject, packageRoot = defaultPackageRoot) {
   const resolvedTarget = path.resolve(targetProject);
+  const mobileRoot = findMobileAppRoot(resolvedTarget);
   const screensDir = detectScreensDirectory(resolvedTarget);
 
-  // 1. Update package.json with "canvas": "zelune" script if present
-  const pkgJsonPath = path.join(resolvedTarget, 'package.json');
-  let updatedPackageJson = false;
-  if (fs.existsSync(pkgJsonPath)) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
-      pkg.scripts = pkg.scripts || {};
-      if (pkg.name !== 'zelune' && !pkg.scripts.canvas) {
-        pkg.scripts.canvas = 'zelune';
-        fs.writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
-        updatedPackageJson = true;
-      }
-    } catch {
-      // Ignore malformed package.json
-    }
+  // 1. Update package.json with "canvas": "zelune" script in target root (and nested mobile root if different)
+  let updatedPackageJson = addCanvasScriptToPackageJson(resolvedTarget);
+  if (mobileRoot !== resolvedTarget) {
+    const updatedNested = addCanvasScriptToPackageJson(mobileRoot);
+    updatedPackageJson = updatedPackageJson || updatedNested;
   }
 
   // 2. Create or merge mcp_config.json with the zelune MCP server entry
@@ -91,7 +249,7 @@ export function initProject(targetProject, packageRoot = defaultPackageRoot) {
   }
   mcpConfig.mcpServers.zelune = {
     command: 'npx',
-    args: ['-y', 'zelune', '--mcp', '--project', resolvedTarget],
+    args: ['-y', 'zelune', '--mcp', '--project', mobileRoot],
   };
   fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2) + '\n', 'utf8');
 
@@ -139,6 +297,7 @@ export function initProject(targetProject, packageRoot = defaultPackageRoot) {
 
   return {
     targetProject: resolvedTarget,
+    mobileRoot,
     screensDir: screensDir ?? 'src/screens (or app/)',
     updatedPackageJson,
     mcpConfigPath,
@@ -178,6 +337,9 @@ Usage:
   if (isInitMode) {
     const result = initProject(targetProject, defaultPackageRoot);
     console.log(`\n✨ Zelune initialized in ${result.targetProject}`);
+    if (result.mobileRoot !== result.targetProject) {
+      console.log(`   • Detected nested mobile app: ${result.mobileRoot}`);
+    }
     console.log(`   • Screens directory: ${result.screensDir}`);
     if (result.updatedPackageJson) {
       console.log(`   • Added "canvas": "zelune" script to package.json`);
@@ -187,13 +349,14 @@ Usage:
     if (result.createdDesignMd || result.createdProductMd) {
       console.log(`   • Created starter DESIGN.md & PRODUCT.md governance docs`);
     }
-    console.log(`\n👉 Run "npm run canvas" (or "zelune") to open your screens in the visual canvas!\n`);
+    console.log(`\n👉 Run "npx zelune" (or "npm run canvas") to open your screens in the visual canvas!\n`);
     process.exit(0);
   }
 
+  const resolvedMobileRoot = findMobileAppRoot(targetProject);
   const env = {
     ...process.env,
-    ANTIGRAVITY_TARGET_PROJECT: targetProject,
+    ANTIGRAVITY_TARGET_PROJECT: resolvedMobileRoot,
   };
 
   if (isMcpMode) {
@@ -212,7 +375,9 @@ Usage:
   if (portFlagIdx !== -1 && args[portFlagIdx + 1]) {
     const parsedPort = Number.parseInt(String(args[portFlagIdx + 1]), 10);
     if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
-      console.error(`Error: Invalid --port value "${args[portFlagIdx + 1]}". Must be an integer between 1 and 65535.`);
+      console.error(
+        `Error: Invalid --port value "${args[portFlagIdx + 1]}". Must be an integer between 1 and 65535.`
+      );
       process.exit(1);
     }
     port = String(parsedPort);
@@ -222,20 +387,34 @@ Usage:
   }
 
   const shouldOpenBrowser = !args.includes('--no-open');
-  const viteArgs = ['vite', '--host', '127.0.0.1', '--port', port];
+  const viteCliFlags = ['--host', '127.0.0.1', '--port', port];
   if (shouldOpenBrowser) {
-    viteArgs.push('--open');
+    viteCliFlags.push('--open');
   }
 
   console.log(`\n🚀 Zelune — React Native Visual Canvas & MCP`);
-  console.log(`📂 Target Project: ${targetProject}`);
+  console.log(`📂 Workspace Root: ${targetProject}`);
+  if (resolvedMobileRoot !== targetProject) {
+    console.log(`📱 Mobile App Dir: ${resolvedMobileRoot}`);
+  }
   console.log(`🌐 Studio URL:     http://127.0.0.1:${port}\n`);
 
-  const child = spawn('npx', viteArgs, {
-    cwd: defaultPackageRoot,
-    env,
-    stdio: 'inherit',
-  });
+  let child;
+  try {
+    const viteBinPath = requireFromCli.resolve('vite/bin/vite.js');
+    child = spawn(process.execPath, [viteBinPath, ...viteCliFlags], {
+      cwd: defaultPackageRoot,
+      env,
+      stdio: 'inherit',
+    });
+  } catch {
+    child = spawn('npx', ['vite', ...viteCliFlags], {
+      cwd: defaultPackageRoot,
+      env,
+      stdio: 'inherit',
+    });
+  }
+
   child.on('exit', (code) => process.exit(code ?? 0));
 }
 

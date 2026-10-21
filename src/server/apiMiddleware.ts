@@ -7,10 +7,12 @@ import {
   getActiveProjectRoot,
   inspectElement,
   patchElement,
+  reorderElement,
   undoLastPatch,
   redoLastPatch,
   getHistoryStatus,
   type PatchPayload,
+  type ReorderPayload,
 } from './astEngine';
 
 const MAX_BODY_BYTES = 1_000_000;
@@ -259,6 +261,20 @@ export function viteCanvasApiMiddleware(workspaceRoot: string): Plugin {
           if (req.method === 'POST' && pathname === '/api/patch') {
             const body = await readJsonBody<PatchPayload>(req);
             const result = await patchElement(workspaceRoot, body);
+            return sendJson(res, 200, {
+              ok: true,
+              element: result.element,
+              history: {
+                undoAvailable: result.undoAvailable,
+                redoAvailable: result.redoAvailable,
+              },
+            });
+          }
+
+          // POST /api/reorder
+          if (req.method === 'POST' && pathname === '/api/reorder') {
+            const body = await readJsonBody<ReorderPayload>(req);
+            const result = await reorderElement(workspaceRoot, body);
             return sendJson(res, 200, {
               ok: true,
               element: result.element,

@@ -29,7 +29,7 @@ import type {
   ScreenMetadata,
   SelectedElementRef,
 } from './types';
-import type { PatchPayload } from '../server/astEngine';
+import type { PatchPayload, ReorderPayload } from '../server/astEngine';
 
 const DEFAULT_WIDTH = 393;
 const DEFAULT_HEIGHT = 852;
@@ -242,6 +242,50 @@ export const CanvasApp: React.FC = () => {
     [fetchScreens]
   );
 
+  // Surgical AST Sibling Reorder handler
+  const handleReorderElement = useCallback(
+    async (payload: ReorderPayload) => {
+      setIsSaving(true);
+      setStatusMessage(null);
+      try {
+        const res = await fetch('/api/reorder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = (await res.json()) as {
+          ok: boolean;
+          element?: InspectedElement;
+          history?: { undoAvailable: number; redoAvailable: number };
+          error?: string;
+        };
+        if (data.ok && data.element) {
+          setInspectedData(data.element);
+          if (data.history) setHistoryState(data.history);
+          setSelectedElement((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  line: data.element!.line,
+                  col: data.element!.col,
+                  astPath: data.element!.astPath,
+                }
+              : null
+          );
+          setStatusMessage('Reordered in .tsx');
+          void fetchScreens();
+        } else if (data.error) {
+          setStatusMessage(`Error: ${data.error}`);
+        }
+      } catch {
+        setStatusMessage('Failed to reorder AST element');
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [fetchScreens]
+  );
+
   // Undo & Redo handlers
   const handleUndo = useCallback(async () => {
     const res = await fetch('/api/undo', {
@@ -316,6 +360,36 @@ export const CanvasApp: React.FC = () => {
       } else if (!isInputFocused && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === ']') {
         e.preventDefault();
         setIsRightPanelOpen((prev) => !prev);
+      } else if (
+        !isInputFocused &&
+        selectedElement &&
+        inspectedData &&
+        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)
+      ) {
+        e.preventDefault();
+        const step = e.shiftKey ? 8 : 1;
+        const isAbs = inspectedData.styles.position === 'absolute';
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          const prop = isAbs ? 'top' : 'marginTop';
+          const currentVal = Number(inspectedData.styles[prop] ?? 0) || 0;
+          const nextVal = e.key === 'ArrowUp' ? currentVal - step : currentVal + step;
+          void handlePatchElement({
+            file: selectedElement.file,
+            astPath: selectedElement.astPath,
+            line: selectedElement.line,
+            styles: { [prop]: nextVal },
+          });
+        } else {
+          const prop = isAbs ? 'left' : 'marginLeft';
+          const currentVal = Number(inspectedData.styles[prop] ?? 0) || 0;
+          const nextVal = e.key === 'ArrowLeft' ? currentVal - step : currentVal + step;
+          void handlePatchElement({
+            file: selectedElement.file,
+            astPath: selectedElement.astPath,
+            line: selectedElement.line,
+            styles: { [prop]: nextVal },
+          });
+        }
       } else if (e.key === 'Escape') {
         setSelectedElement(null);
         setInspectedData(null);
@@ -324,7 +398,7 @@ export const CanvasApp: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo, handleRedo]);
+  }, [handleUndo, handleRedo, selectedElement, inspectedData, handlePatchElement]);
 
   // Lock out whole-page browser pinch-to-zoom & route trackpad pinch to cursor-centered canvas zoom
   useEffect(() => {
@@ -1179,11 +1253,14 @@ export const CanvasApp: React.FC = () => {
                   isActiveScreen={activeScreenId === screen.id}
                   isHighlightedScreen={highlightedScreenId === screen.id}
                   selectedElement={selectedElement}
+                  inspectedElement={inspectedData}
                   onSelectElement={handleSelectElement}
                   onSelectScreen={setActiveScreenId}
                   onFocusScreen={focusOnScreen}
                   onMoveArtboard={handleMoveArtboard}
                   onNavigateFlow={handleNavigateFlow}
+                  onPatchElement={handlePatchElement}
+                  onReorderElement={handleReorderElement}
                 />
               );
             })}
