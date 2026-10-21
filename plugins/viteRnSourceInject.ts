@@ -9,6 +9,8 @@ import type { Plugin } from 'vite';
 const traverse = (_traverse as unknown as { default?: typeof _traverse }).default ?? _traverse;
 const generate = (_generate as unknown as { default?: typeof _generate }).default ?? _generate;
 
+const ALLOWED_SCREEN_PREFIXES = ['src/screens/', 'screens/', 'app/', 'src/app/'];
+
 export function getJsxTagName(nameNode: t.JSXOpeningElement['name']): string {
   if (t.isJSXIdentifier(nameNode)) {
     return nameNode.name;
@@ -37,8 +39,9 @@ export function viteRnSourceInject(workspaceRoot: string): Plugin {
       const resolvedFile = path.resolve(cleanId);
       const relPath = path.relative(normalizedRoot, resolvedFile).replace(/\\/g, '/');
 
-      // Only instrument screen and component files inside src/screens
-      if (!relPath.startsWith('src/screens/')) {
+      // Instrument screen files across src/screens/, screens/, app/, and src/app/
+      const isScreenFile = ALLOWED_SCREEN_PREFIXES.some((prefix) => relPath.startsWith(prefix));
+      if (!isScreenFile) {
         return null;
       }
 
@@ -105,7 +108,7 @@ export function viteRnSourceInject(workspaceRoot: string): Plugin {
           code: output.code,
           map: output.map,
         };
-      } catch (err) {
+      } catch {
         // Return untransformed code so Vite's error overlay or ScreenErrorBoundary can report it cleanly
         return null;
       }

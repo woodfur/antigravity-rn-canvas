@@ -3,6 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   discoverScreens,
+  discoverScreenFilesSync,
+  normalizeRouteTarget,
   inspectElement,
   patchElement,
   undoLastPatch,
@@ -84,5 +86,15 @@ describe('Antigravity React Native Visual Canvas — AST Engine', () => {
     expect(afterRedo.textContent).toBe('Welcome to Antigravity');
 
     await undoLastPatch(WORKSPACE_ROOT);
+  });
+
+  it('normalizes Expo Router and nested React Navigation route paths for universal screen loading', () => {
+    expect(normalizeRouteTarget('/(tabs)/index')).toBe('Home');
+    expect(normalizeRouteTarget('/(tabs)/profile')).toBe('Profile');
+    expect(normalizeRouteTarget('ProductDetailScreen')).toBe('ProductDetail');
+
+    const syncFiles = discoverScreenFilesSync(WORKSPACE_ROOT);
+    expect(syncFiles.length).toBeGreaterThanOrEqual(5);
+    expect(syncFiles.some((f) => f.id === 'Home')).toBe(true);
   });
 });

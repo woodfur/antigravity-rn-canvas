@@ -19,7 +19,7 @@ const WORKSPACE_ROOT = path.resolve(__dirname, '..');
 const server = new Server(
   {
     name: 'zelune',
-    version: '1.1.0',
+    version: '1.3.0',
   },
   {
     capabilities: {

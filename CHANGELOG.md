@@ -2,6 +2,12 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.3.0] - 2026-10-21
+
+### Added
+- **Universal Vite Virtual Screen Loader (`plugins/viteVirtualScreensPlugin.ts`, `src/screens/index.ts`, `vite.config.ts`)**: Replaced static screen imports with `virtual:zelune-screens` so running `zelune --project /path/to/app` dynamically discovers and mounts `.tsx` and `.jsx` screens from any React Native or Expo project (`src/screens/`, `screens/`, `app/`, `src/app/`, including nested route folders like `app/(tabs)/index.tsx`).
+- **Expo Router, React Navigation & Safe Area Browser Shims (`src/runtime/MockNavigationContext.tsx`, `vite.config.ts`)**: Added built-in web shims for `@react-navigation/native`, `expo-router` (`useRouter`, `useLocalSearchParams`, `Link`, `Stack`, `Tabs`), `react-native-safe-area-context` (`SafeAreaView`, `useSafeAreaInsets`), `expo-status-bar`, `lucide-react-native`, and automatic `tsconfig.json` `paths` alias (`@/`) resolution for external projects.
+
 ## [1.2.1] - 2026-10-21
 
 ### Added

@@ -144,12 +144,16 @@ export function resolveSafeScreenPath(workspaceRoot: string, relativeFile: strin
 }
 
 /**
- * Normalizes a route target string (e.g. '/product-detail' or 'ProductDetailScreen') to screen ID.
+ * Normalizes a route target string (e.g. '/(tabs)/product-detail' or 'ProductDetailScreen') to screen ID.
  */
-function normalizeRouteTarget(rawTarget: string): string {
-  const trimmed = rawTarget.replace(/^\/+/, '').replace(/Screen$/, '');
+export function normalizeRouteTarget(rawTarget: string): string {
+  const trimmed = rawTarget
+    .replace(/^\/+/, '')
+    .replace(/\([^)]+\)\/?/g, '')
+    .replace(/Screen$/, '')
+    .replace(/\/index$/, '');
   if (!trimmed || trimmed === 'index') return 'Home';
-  if (trimmed.includes('-') || trimmed === trimmed.toLowerCase()) {
+  if (trimmed.includes('-') || trimmed.includes('/') || trimmed === trimmed.toLowerCase()) {
     return trimmed
       .split(/[-_/]/)
       .filter(Boolean)
@@ -380,36 +384,98 @@ function resolveElementStyles(
   return { styleSource, styleSheetKey, inlineObject, styles };
 }
 
+export interface DiscoveredScreenFile {
+  id: string;
+  name: string;
+  routeName: string;
+  relPath: string;
+  fullPath: string;
+}
+
+/**
+ * Synchronously discovers all screen files in the active React Native / Expo project
+ * (`src/screens`, `screens`, `app`, or `src/app`), supporting nested route folders.
+ */
+export function discoverScreenFilesSync(workspaceRoot: string): DiscoveredScreenFile[] {
+  const activeRoot = getActiveProjectRoot(workspaceRoot);
+  const { dirPath: screensDir, relDir } = resolveScreensDirectory(activeRoot);
+
+  const collectedRelFromScreensDir: string[] = [];
+
+  function walk(currDir: string, relPrefix: string, depth: number) {
+    if (depth > 4) return;
+    let dirents: fsSync.Dirent[] = [];
+    try {
+      dirents = fsSync.readdirSync(currDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of dirents) {
+      if (entry.name.startsWith('.')) continue;
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules' || entry.name === '__tests__' || entry.name === 'components') {
+          continue;
+        }
+        walk(
+          path.join(currDir, entry.name),
+          relPrefix ? `${relPrefix}/${entry.name}` : entry.name,
+          depth + 1
+        );
+      } else if (entry.isFile()) {
+        const f = entry.name;
+        if (f.startsWith('_') || f.startsWith('+')) continue;
+        if (f === 'index.ts' || f === 'index.js') continue;
+        if (f.includes('.test.') || f.includes('.spec.') || f.endsWith('.d.ts')) continue;
+        if (!f.endsWith('.tsx') && !f.endsWith('.jsx')) continue;
+
+        collectedRelFromScreensDir.push(relPrefix ? `${relPrefix}/${f}` : f);
+      }
+    }
+  }
+
+  walk(screensDir, '', 0);
+  collectedRelFromScreensDir.sort();
+
+  const seenIds = new Set<string>();
+  const files: DiscoveredScreenFile[] = [];
+
+  for (const subRel of collectedRelFromScreensDir) {
+    const relPath = `${relDir}/${subRel}`.replace(/\\/g, '/');
+    const fullPath = path.join(screensDir, subRel);
+    const noExt = subRel.replace(/\.(tsx|jsx)$/, '');
+    const baseFileName = path.basename(noExt);
+
+    let routeName = normalizeRouteTarget(noExt);
+    if (seenIds.has(routeName)) {
+      routeName = normalizeRouteTarget(noExt.replace(/[()]/g, ''));
+    }
+    seenIds.add(routeName);
+
+    const displayName = baseFileName.endsWith('Screen') ? baseFileName : `${routeName}Screen`;
+
+    files.push({
+      id: routeName,
+      name: displayName,
+      routeName,
+      relPath,
+      fullPath,
+    });
+  }
+
+  return files;
+}
+
 /**
  * Discovers all screens in the active React Native / Expo project (`src/screens`, `screens`, or `app`)
  * and extracts their navigation flow graph.
  */
 export async function discoverScreens(workspaceRoot: string): Promise<ScreenMetadata[]> {
-  const activeRoot = getActiveProjectRoot(workspaceRoot);
-  const { dirPath: screensDir, relDir } = resolveScreensDirectory(activeRoot);
-
-  let entries: string[] = [];
-  try {
-    entries = await fs.readdir(screensDir);
-  } catch {
-    return [];
-  }
-
-  const screenFiles = entries
-    .filter((f) => {
-      if (f.startsWith('.') || f.startsWith('_') || f.startsWith('+')) return false;
-      if (f === 'index.ts' || f === 'index.js') return false;
-      return f.endsWith('.tsx') || f.endsWith('.jsx');
-    })
-    .sort();
-
+  const screenFiles = discoverScreenFilesSync(workspaceRoot);
   const results: ScreenMetadata[] = [];
 
-  for (const fileName of screenFiles) {
-    const relPath = `${relDir}/${fileName}`;
-    const fullPath = path.join(screensDir, fileName);
-    const baseName = fileName.replace(/\.(tsx|jsx)$/, '');
-    const routeName = normalizeRouteTarget(baseName);
+  for (const item of screenFiles) {
+    const { id: routeName, name, relPath, fullPath } = item;
 
     try {
       const code = await fs.readFile(fullPath, 'utf-8');
@@ -470,7 +536,7 @@ export async function discoverScreens(workspaceRoot: string): Promise<ScreenMeta
 
       results.push({
         id: routeName,
-        name: baseName.endsWith('Screen') ? baseName : `${routeName}Screen`,
+        name,
         routeName,
         filePath: relPath,
         elementCount,
@@ -480,7 +546,7 @@ export async function discoverScreens(workspaceRoot: string): Promise<ScreenMeta
       const msg = err instanceof Error ? err.message : String(err);
       results.push({
         id: routeName,
-        name: baseName,
+        name,
         routeName,
         filePath: relPath,
         elementCount: 0,
