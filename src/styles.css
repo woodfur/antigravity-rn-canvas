@@ -60,6 +60,7 @@ body,
   background-color: var(--studio-canvas-bg);
   color: var(--studio-text-primary);
   -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
 }
 
 /* Prevent numeric jitter on coordinates, zoom readouts, line numbers, and prices */
@@ -77,6 +78,18 @@ body,
   background-color: var(--studio-canvas-bg);
   background-image: radial-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px);
   background-size: 24px 24px;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+/* Smooth Collapsible Studio Side Panels (emilkowalski/skills --ease-out-expo) */
+.zelune-collapsible-panel {
+  overflow: hidden;
+  flex-shrink: 0;
+  transition:
+    width var(--duration-panel) var(--ease-out-expo),
+    opacity var(--duration-micro) var(--ease-out),
+    border-color var(--duration-micro) var(--ease-out);
 }
 
 /* Tactile Studio Controls (emilkowalski/skills + individual-transform-properties) */

@@ -12,6 +12,11 @@ import {
   Layers,
   RefreshCw,
   SlidersHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  Sliders,
 } from 'lucide-react';
 import { SCREEN_COMPONENTS, SCREEN_ORDER } from '../screens';
 import { ScreenArtboard } from './ScreenArtboard';
@@ -32,6 +37,12 @@ const DEFAULT_HEIGHT = 852;
 const ARTBOARD_GAP = 130;
 const INITIAL_OFFSET_X = 80;
 const INITIAL_OFFSET_Y = 70;
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 1.75;
+
+function clampZoom(z: number): number {
+  return Number(Math.min(Math.max(z, MIN_ZOOM), MAX_ZOOM).toFixed(3));
+}
 
 function buildDefaultLayout(screens: ScreenMetadata[]): ArtboardLayoutMap {
   const map: ArtboardLayoutMap = {};
@@ -53,6 +64,10 @@ export const CanvasApp: React.FC = () => {
   const [showFlows, setShowFlows] = useState<boolean>(true);
   const [density, setDensity] = useState<'compact' | 'spacious'>('compact');
 
+  // Collapsible Left (Screen Rail) & Right (AST Inspector) Panels
+  const [isLeftPanelOpen, setIsLeftPanelOpen] = useState<boolean>(true);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState<boolean>(true);
+
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 20, y: 10 });
   const [zoom, setZoom] = useState<number>(0.68);
   const [isPanning, setIsPanning] = useState<boolean>(false);
@@ -73,6 +88,16 @@ export const CanvasApp: React.FC = () => {
 
   const canvasViewportRef = useRef<HTMLDivElement | null>(null);
   const cameraTimerRef = useRef<number | null>(null);
+
+  // Refs for synchronous access inside non-passive native wheel/gesture listeners
+  const zoomRef = useRef<number>(zoom);
+  const panRef = useRef<{ x: number; y: number }>(pan);
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+  useEffect(() => {
+    panRef.current = pan;
+  }, [pan]);
 
   const triggerCameraTransition = useCallback(() => {
     if (cameraTimerRef.current) {
@@ -164,6 +189,7 @@ export const CanvasApp: React.FC = () => {
     (ref: SelectedElementRef) => {
       setSelectedElement(ref);
       setActiveScreenId(ref.screenId);
+      setIsRightPanelOpen(true);
       void inspectSelectedElement(ref);
     },
     [inspectSelectedElement]
@@ -256,7 +282,7 @@ export const CanvasApp: React.FC = () => {
     }
   }, [selectedElement, inspectSelectedElement, fetchScreens]);
 
-  // Global keyboard shortcuts (Cmd+Z, Cmd+Shift+Z, Escape)
+  // Global keyboard shortcuts (Cmd+Z, Cmd+Shift+Z, [ and ] for sidebars, Escape)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -273,6 +299,12 @@ export const CanvasApp: React.FC = () => {
         } else {
           void handleUndo();
         }
+      } else if (!isInputFocused && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === '[') {
+        e.preventDefault();
+        setIsLeftPanelOpen((prev) => !prev);
+      } else if (!isInputFocused && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === ']') {
+        e.preventDefault();
+        setIsRightPanelOpen((prev) => !prev);
       } else if (e.key === 'Escape') {
         setSelectedElement(null);
         setInspectedData(null);
@@ -282,6 +314,103 @@ export const CanvasApp: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleUndo, handleRedo]);
+
+  // Lock out whole-page browser pinch-to-zoom & route trackpad pinch to cursor-centered canvas zoom
+  useEffect(() => {
+    const viewport = canvasViewportRef.current;
+
+    const applyFocalZoom = (nextZoomRaw: number, clientX: number, clientY: number) => {
+      if (!viewport) return;
+      const rect = viewport.getBoundingClientRect();
+      const prevZoom = zoomRef.current;
+      const prevPan = panRef.current;
+      const nextZoom = clampZoom(nextZoomRaw);
+
+      if (nextZoom === prevZoom) return;
+
+      // Pin the world coordinate directly under the user's cursor during two-finger pinch
+      const cursorX = clientX - rect.left;
+      const cursorY = clientY - rect.top;
+      const worldX = (cursorX - prevPan.x) / prevZoom;
+      const worldY = (cursorY - prevPan.y) / prevZoom;
+
+      const nextPan = {
+        x: cursorX - worldX * nextZoom,
+        y: cursorY - worldY * nextZoom,
+      };
+
+      setIsCameraAnimating(false);
+      zoomRef.current = nextZoom;
+      panRef.current = nextPan;
+      setZoom(nextZoom);
+      setPan(nextPan);
+    };
+
+    // 1. Non-passive wheel listener on the canvas viewport for 0ms pan & focal pinch-zoom
+    const handleCanvasWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.ctrlKey || e.metaKey) {
+        // Trackpad two-finger pinch or Cmd/Ctrl + wheel
+        const zoomFactor = Math.exp(-e.deltaY * 0.0085);
+        applyFocalZoom(zoomRef.current * zoomFactor, e.clientX, e.clientY);
+      } else {
+        setIsCameraAnimating(false);
+        const nextPan = {
+          x: panRef.current.x - e.deltaX,
+          y: panRef.current.y - e.deltaY,
+        };
+        panRef.current = nextPan;
+        setPan(nextPan);
+      }
+    };
+
+    // 2. Document-level non-passive guard so pinching over the top bar or sidebars NEVER zooms the browser page
+    const handleDocumentWheelGuard = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+    };
+
+    // 3. WebKit/Safari proprietary trackpad gesture guard (gesturestart / gesturechange / gestureend)
+    let gestureStartZoom = zoomRef.current;
+    const handleGestureStart = (e: Event) => {
+      e.preventDefault();
+      gestureStartZoom = zoomRef.current;
+    };
+    const handleGestureChange = (e: Event) => {
+      e.preventDefault();
+      const gestureEvent = e as unknown as {
+        scale?: number;
+        clientX?: number;
+        clientY?: number;
+      };
+      if (typeof gestureEvent.scale === 'number' && viewport) {
+        const rect = viewport.getBoundingClientRect();
+        const cx = gestureEvent.clientX ?? rect.left + rect.width / 2;
+        const cy = gestureEvent.clientY ?? rect.top + rect.height / 2;
+        applyFocalZoom(gestureStartZoom * gestureEvent.scale, cx, cy);
+      }
+    };
+    const handleGestureEnd = (e: Event) => {
+      e.preventDefault();
+    };
+
+    viewport?.addEventListener('wheel', handleCanvasWheel, { passive: false });
+    document.addEventListener('wheel', handleDocumentWheelGuard, { passive: false });
+    document.addEventListener('gesturestart', handleGestureStart, { passive: false });
+    document.addEventListener('gesturechange', handleGestureChange, { passive: false });
+    document.addEventListener('gestureend', handleGestureEnd, { passive: false });
+
+    return () => {
+      viewport?.removeEventListener('wheel', handleCanvasWheel);
+      document.removeEventListener('wheel', handleDocumentWheelGuard);
+      document.removeEventListener('gesturestart', handleGestureStart);
+      document.removeEventListener('gesturechange', handleGestureChange);
+      document.removeEventListener('gestureend', handleGestureEnd);
+    };
+  }, []);
 
   // Center viewport on a specific screen artboard using Emil Kowalski ease-out-expo camera physics
   const focusOnScreen = useCallback(
@@ -374,7 +503,7 @@ export const CanvasApp: React.FC = () => {
     [focusOnScreen]
   );
 
-  // Canvas background pointer pan & wheel zoom/pan (0ms direct manipulation override)
+  // Canvas background pointer pan (0ms direct manipulation override)
   const handleCanvasPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0 && e.button !== 1) return;
     setIsCameraAnimating(false);
@@ -386,10 +515,12 @@ export const CanvasApp: React.FC = () => {
     const startPanY = pan.y;
 
     const handleMove = (moveEvent: PointerEvent) => {
-      setPan({
+      const nextPan = {
         x: startPanX + (moveEvent.clientX - startX),
         y: startPanY + (moveEvent.clientY - startY),
-      });
+      };
+      panRef.current = nextPan;
+      setPan(nextPan);
     };
 
     const handleUp = () => {
@@ -400,20 +531,6 @@ export const CanvasApp: React.FC = () => {
 
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', handleUp);
-  };
-
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    setIsCameraAnimating(false);
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const delta = -e.deltaY * 0.0015;
-      setZoom((prev) => Number(Math.min(Math.max(prev + delta, 0.25), 1.75).toFixed(2)));
-    } else {
-      setPan((prev) => ({
-        x: prev.x - e.deltaX,
-        y: prev.y - e.deltaY,
-      }));
-    }
   };
 
   return (
@@ -439,12 +556,35 @@ export const CanvasApp: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '0 16px',
+          padding: '0 14px',
           zIndex: 40,
         }}
       >
-        {/* Left: Architectural Brand Identity (No cliché purple-blue gradient slop) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {/* Left: Sidebar Toggle + Architectural Brand Identity */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            type="button"
+            className="zelune-interactive"
+            onClick={() => setIsLeftPanelOpen((prev) => !prev)}
+            title={`${isLeftPanelOpen ? 'Collapse' : 'Expand'} Screens Sidebar ([)`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 30,
+              height: 30,
+              borderRadius: 7,
+              border: `1px solid ${
+                isLeftPanelOpen ? 'rgba(56, 189, 248, 0.35)' : 'var(--studio-border-subtle)'
+              }`,
+              backgroundColor: isLeftPanelOpen ? 'var(--studio-surface-3)' : 'var(--studio-surface-2)',
+              color: isLeftPanelOpen ? '#38BDF8' : 'var(--studio-text-secondary)',
+              cursor: 'pointer',
+            }}
+          >
+            {isLeftPanelOpen ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
+          </button>
+
           <div
             style={{
               width: 30,
@@ -603,7 +743,7 @@ export const CanvasApp: React.FC = () => {
           </button>
         </div>
 
-        {/* Right: Undo/Redo & Viewport Controls */}
+        {/* Right: Undo/Redo, Viewport Controls & Right Inspector Toggle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button
             type="button"
@@ -658,7 +798,7 @@ export const CanvasApp: React.FC = () => {
             className="zelune-interactive"
             onClick={() => {
               triggerCameraTransition();
-              setZoom((z) => Number(Math.max(0.25, z - 0.1).toFixed(2)));
+              setZoom((z) => clampZoom(z - 0.1));
             }}
             title="Zoom Out"
             style={{
@@ -691,7 +831,7 @@ export const CanvasApp: React.FC = () => {
             className="zelune-interactive"
             onClick={() => {
               triggerCameraTransition();
-              setZoom((z) => Number(Math.min(1.75, z + 0.1).toFixed(2)));
+              setZoom((z) => clampZoom(z + 0.1));
             }}
             title="Zoom In"
             style={{
@@ -751,132 +891,196 @@ export const CanvasApp: React.FC = () => {
             <LayoutGrid size={12} />
             <span>Grid</span>
           </button>
+
+          <div style={{ width: 1, height: 20, backgroundColor: 'var(--studio-border-subtle)', margin: '0 3px' }} />
+
+          <button
+            type="button"
+            className="zelune-interactive"
+            onClick={() => setIsRightPanelOpen((prev) => !prev)}
+            title={`${isRightPanelOpen ? 'Collapse' : 'Expand'} AST Inspector Panel (])`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 30,
+              height: 30,
+              borderRadius: 7,
+              border: `1px solid ${
+                isRightPanelOpen ? 'rgba(56, 189, 248, 0.35)' : 'var(--studio-border-subtle)'
+              }`,
+              backgroundColor: isRightPanelOpen ? 'var(--studio-surface-3)' : 'var(--studio-surface-2)',
+              color: isRightPanelOpen ? '#38BDF8' : 'var(--studio-text-secondary)',
+              cursor: 'pointer',
+            }}
+          >
+            {isRightPanelOpen ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
+          </button>
         </div>
       </header>
 
-      {/* Main Studio Body: Left Screen Rail + Infinite Canvas + Right AST Inspector */}
+      {/* Main Studio Body: Collapsible Left Screen Rail + Infinite Canvas + Collapsible Right AST Inspector */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Left Sidebar: Screen Artboard Navigator */}
         <aside
-          className="zelune-scroller"
+          aria-hidden={!isLeftPanelOpen}
+          className="zelune-collapsible-panel"
           style={{
-            width: 224,
+            width: isLeftPanelOpen ? 224 : 0,
+            opacity: isLeftPanelOpen ? 1 : 0,
+            pointerEvents: isLeftPanelOpen ? 'auto' : 'none',
             backgroundColor: 'var(--studio-surface-1)',
-            borderRight: '1px solid var(--studio-border-hairline)',
+            borderRight: isLeftPanelOpen
+              ? '1px solid var(--studio-border-hairline)'
+              : '0px solid transparent',
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'space-between',
-            padding: 12,
             zIndex: 30,
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div
-              className="tabular-nums"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '4px 8px 6px',
-                fontSize: 10.5,
-                fontFamily: 'var(--font-mono)',
-                fontWeight: 600,
-                color: 'var(--studio-text-muted)',
-                letterSpacing: '0.06em',
-              }}
-            >
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Layers size={12} color="#38BDF8" />
-                <span>SCREENS ({screens.length})</span>
-              </span>
-              <button
-                type="button"
-                className="zelune-interactive"
-                onClick={() => void fetchScreens()}
-                title="Refresh Screen Discovery"
-                style={{
-                  background: 'transparent',
-                  border: '1px solid transparent',
-                  borderRadius: 4,
-                  color: 'var(--studio-text-muted)',
-                  cursor: 'pointer',
-                  padding: 3,
-                }}
-              >
-                <RefreshCw size={11} />
-              </button>
-            </div>
-
-            {screens.map((scr) => {
-              const isSelected = activeScreenId === scr.id;
-              return (
-                <button
-                  key={scr.id}
-                  type="button"
-                  className="zelune-interactive zelune-rail-item"
-                  onClick={() => focusOnScreen(scr.id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    width: '100%',
-                    paddingLeft: 10,
-                    paddingRight: 10,
-                    borderRadius: 7,
-                    border: `1px solid ${
-                      isSelected ? 'rgba(56, 189, 248, 0.35)' : 'transparent'
-                    }`,
-                    backgroundColor: isSelected ? 'var(--studio-surface-2)' : 'transparent',
-                    color: isSelected ? '#F8FAFC' : 'var(--studio-text-secondary)',
-                    fontSize: 12.5,
-                    fontWeight: isSelected ? 600 : 500,
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
-                >
-                  <span>{scr.id}</span>
-                  <span
-                    className="tabular-nums"
-                    style={{
-                      fontSize: 10,
-                      fontFamily: 'var(--font-mono)',
-                      color: isSelected ? '#38BDF8' : 'var(--studio-text-muted)',
-                    }}
-                  >
-                    {scr.outgoingFlows.length}→
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
           <div
+            className="zelune-scroller"
             style={{
-              backgroundColor: 'var(--studio-surface-2)',
-              border: '1px solid var(--studio-border-hairline)',
-              borderRadius: 9,
-              padding: 11,
-              fontSize: 11,
-              color: 'var(--studio-text-secondary)',
-              lineHeight: 1.55,
+              width: 224,
+              minWidth: 224,
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              padding: 12,
+              overflowY: 'auto',
             }}
           >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div
+                className="tabular-nums"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '4px 6px 6px',
+                  fontSize: 10.5,
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 600,
+                  color: 'var(--studio-text-muted)',
+                  letterSpacing: '0.06em',
+                }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Layers size={12} color="#38BDF8" />
+                  <span>SCREENS ({screens.length})</span>
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <button
+                    type="button"
+                    className="zelune-interactive"
+                    onClick={() => void fetchScreens()}
+                    title="Refresh Screen Discovery"
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid transparent',
+                      borderRadius: 4,
+                      color: 'var(--studio-text-muted)',
+                      cursor: 'pointer',
+                      padding: 3,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <RefreshCw size={11} />
+                  </button>
+                  <button
+                    type="button"
+                    className="zelune-interactive"
+                    onClick={() => setIsLeftPanelOpen(false)}
+                    title="Collapse Screens Sidebar ([)"
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid transparent',
+                      borderRadius: 4,
+                      color: 'var(--studio-text-muted)',
+                      cursor: 'pointer',
+                      padding: 3,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <PanelLeftClose size={12} />
+                  </button>
+                </div>
+              </div>
+
+              {screens.map((scr) => {
+                const isSelected = activeScreenId === scr.id;
+                return (
+                  <button
+                    key={scr.id}
+                    type="button"
+                    className="zelune-interactive zelune-rail-item"
+                    onClick={() => focusOnScreen(scr.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                      paddingLeft: 10,
+                      paddingRight: 10,
+                      borderRadius: 7,
+                      border: `1px solid ${
+                        isSelected ? 'rgba(56, 189, 248, 0.35)' : 'transparent'
+                      }`,
+                      backgroundColor: isSelected ? 'var(--studio-surface-2)' : 'transparent',
+                      color: isSelected ? '#F8FAFC' : 'var(--studio-text-secondary)',
+                      fontSize: 12.5,
+                      fontWeight: isSelected ? 600 : 500,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span>{scr.id}</span>
+                    <span
+                      className="tabular-nums"
+                      style={{
+                        fontSize: 10,
+                        fontFamily: 'var(--font-mono)',
+                        color: isSelected ? '#38BDF8' : 'var(--studio-text-muted)',
+                      }}
+                    >
+                      {scr.outgoingFlows.length}→
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
             <div
               style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                fontWeight: 600,
-                letterSpacing: '0.05em',
-                color: '#E2E8F0',
-                marginBottom: 4,
+                backgroundColor: 'var(--studio-surface-2)',
+                border: '1px solid var(--studio-border-hairline)',
+                borderRadius: 9,
+                padding: 11,
+                fontSize: 11,
+                color: 'var(--studio-text-secondary)',
+                lineHeight: 1.55,
               }}
             >
-              STUDIO ERGONOMICS
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: '0.05em',
+                  color: '#E2E8F0',
+                  marginBottom: 4,
+                }}
+              >
+                STUDIO ERGONOMICS
+              </div>
+              <div>• Two-finger scroll to pan</div>
+              <div>• Two-finger pinch to zoom</div>
+              <div>• Press [ or ] to toggle panels</div>
+              <div>• Click any node to patch AST</div>
             </div>
-            <div>• Drag canvas to pan (0ms lock)</div>
-            <div>• Drag artboard header to move</div>
-            <div>• Cmd + Scroll to zoom</div>
-            <div>• Click any node to patch AST</div>
           </div>
         </aside>
 
@@ -884,7 +1088,6 @@ export const CanvasApp: React.FC = () => {
         <main
           ref={canvasViewportRef}
           onPointerDown={handleCanvasPointerDown}
-          onWheel={handleWheel}
           className="infinite-canvas-surface"
           style={{
             flex: 1,
@@ -893,7 +1096,82 @@ export const CanvasApp: React.FC = () => {
             cursor: isPanning ? 'grabbing' : 'grab',
           }}
         >
-          {/* World Transform Container: Emil Kowalski ease-out-expo on camera focus, 0ms on direct drag */}
+          {/* Floating Edge Restore Pill for Collapsed Left Sidebar */}
+          {!isLeftPanelOpen && (
+            <button
+              type="button"
+              className="zelune-interactive tabular-nums"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsLeftPanelOpen(true);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              title="Expand Screens Navigator ([)"
+              style={{
+                position: 'absolute',
+                top: 14,
+                left: 14,
+                zIndex: 35,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 7,
+                padding: '7px 11px',
+                borderRadius: 8,
+                backgroundColor: 'var(--studio-surface-1)',
+                border: '1px solid var(--studio-border-subtle)',
+                color: '#F1F5F9',
+                fontSize: 11.5,
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 10px 24px -6px rgba(0, 0, 0, 0.65)',
+              }}
+            >
+              <PanelLeftOpen size={13} color="#38BDF8" />
+              <span>Screens ({screens.length})</span>
+            </button>
+          )}
+
+          {/* Floating Edge Restore Pill for Collapsed Right Inspector */}
+          {!isRightPanelOpen && (
+            <button
+              type="button"
+              className="zelune-interactive tabular-nums"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsRightPanelOpen(true);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              title="Expand AST Visual Inspector (])"
+              style={{
+                position: 'absolute',
+                top: 14,
+                right: 14,
+                zIndex: 35,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 7,
+                padding: '7px 11px',
+                borderRadius: 8,
+                backgroundColor: 'var(--studio-surface-1)',
+                border: '1px solid var(--studio-border-subtle)',
+                color: '#F1F5F9',
+                fontSize: 11.5,
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 10px 24px -6px rgba(0, 0, 0, 0.65)',
+              }}
+            >
+              <Sliders size={13} color="#38BDF8" />
+              <span>
+                {inspectedData ? `<${inspectedData.tagName}> L${inspectedData.line}` : 'AST Inspector'}
+              </span>
+              <PanelRightOpen size={13} color="#94A3B8" />
+            </button>
+          )}
+
+          {/* World Transform Container: Emil Kowalski ease-out-expo on camera focus, 0ms on direct drag/pinch */}
           <div
             style={{
               position: 'absolute',
@@ -951,6 +1229,7 @@ export const CanvasApp: React.FC = () => {
         {/* Right: AST Visual Inspector Panel */}
         <InspectorPanel
           inspected={inspectedData}
+          isOpen={isRightPanelOpen}
           isLoading={isInspecting}
           isSaving={isSaving}
           statusMessage={statusMessage}
@@ -959,6 +1238,7 @@ export const CanvasApp: React.FC = () => {
             setSelectedElement(null);
             setInspectedData(null);
           }}
+          onCollapse={() => setIsRightPanelOpen(false)}
           onJumpToScreen={focusOnScreen}
         />
       </div>
