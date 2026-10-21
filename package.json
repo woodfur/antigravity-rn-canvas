@@ -1,6 +1,6 @@
 {
   "name": "zelune",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": false,
   "type": "module",
   "description": "Zelune — Figma-style Multi-Screen React Native Visual Canvas & AST Sync MCP Server for Google Antigravity",

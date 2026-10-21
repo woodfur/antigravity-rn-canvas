@@ -6,23 +6,32 @@ View all of your mobile screens side-by-side on clean `393 × 852` rectangular a
 
 ---
 
-## Global Installation & Quick Start (Any React Native / Expo Project)
+## Global Installation & Effortless Project Setup
 
-### Option A: Run Directly via GitHub / npx (Zero Clone Required)
-Run directly inside any React Native or Expo project directory:
+### 1. Install Globally Once (or via `npm link` locally)
+```bash
+npm install -g github:woodfur/antigravity-rn-canvas
+# Or once published to npm:
+npm install -g zelune
+```
 
+### 2. Initialize & Launch in Any React Native / Expo Project
+Inside any React Native or Expo project folder:
+
+```bash
+cd /path/to/your/react-native-app
+
+# Optional one-time project setup (adds "npm run canvas", mcp_config.json, AI skill, DESIGN.md & PRODUCT.md):
+zelune init
+
+# Launch the visual canvas (auto-selects a free port and opens your browser automatically):
+zelune
+```
+
+You can also run it without installing globally:
 ```bash
 npx github:woodfur/antigravity-rn-canvas
 ```
-*(Or once published to npm: `npx zelune`)*
-
-To target a specific project folder and custom port:
-
-```bash
-npx github:woodfur/antigravity-rn-canvas --project /path/to/your/react-native-app --port 5174
-```
-
-Then open **`http://127.0.0.1:5174`** in your browser.
 
 ### Option B: Install the Zelune AI Agent Skill
 Install the Zelune skill (`skills/rn-canvas/SKILL.md`), design system (`DESIGN.md`, `PRODUCT.md`), and AST rules (`rules/AGENTS.md`) into your AI coding agent:

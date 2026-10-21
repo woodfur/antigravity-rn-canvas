@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -11,6 +13,7 @@ import {
   redoLastPatch,
   resolveSafeScreenPath,
 } from '../src/server/astEngine';
+import { initProject, findAvailablePort } from '../bin/cli.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_ROOT = path.resolve(__dirname, '..');
@@ -96,5 +99,36 @@ describe('Antigravity React Native Visual Canvas — AST Engine', () => {
     const syncFiles = discoverScreenFilesSync(WORKSPACE_ROOT);
     expect(syncFiles.length).toBeGreaterThanOrEqual(5);
     expect(syncFiles.some((f) => f.id === 'Home')).toBe(true);
+  });
+
+  it('initializes an external React Native / Expo project via zelune init and finds available ports', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zelune-init-test-'));
+    try {
+      fs.mkdirSync(path.join(tmpDir, 'app'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ name: 'demo-rn-app', version: '1.0.0', scripts: { start: 'expo start' } }, null, 2)
+      );
+
+      const res = initProject(tmpDir, WORKSPACE_ROOT);
+      expect(res.screensDir).toBe('app');
+      expect(res.updatedPackageJson).toBe(true);
+
+      const updatedPkg = JSON.parse(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8'));
+      expect(updatedPkg.scripts.canvas).toBe('zelune');
+
+      const mcpCfg = JSON.parse(fs.readFileSync(path.join(tmpDir, 'mcp_config.json'), 'utf8'));
+      expect(mcpCfg.mcpServers.zelune.command).toBe('npx');
+
+      expect(fs.existsSync(path.join(tmpDir, '.agents/skills/zelune/SKILL.md'))).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, 'DESIGN.md'))).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, 'PRODUCT.md'))).toBe(true);
+      expect(fs.readFileSync(path.join(tmpDir, '.gitignore'), 'utf8')).toContain('.canvas-layout.json');
+
+      const port = await findAvailablePort(5173);
+      expect(port).toBeGreaterThanOrEqual(5173);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });
