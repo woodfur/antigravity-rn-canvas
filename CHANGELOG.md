@@ -2,6 +2,15 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.4.1] - 2026-10-21
+
+### Fixed
+- **JSX / TypeScript Code Injection Prevention (`src/server/astEngine.ts`)**: Added `createSafeJsxTextChild` in `patchElement` so `<Text>` copy updates containing JSX control characters (`{`, `}`, `<`, `>`), newlines, or leading/trailing whitespace are wrapped as `t.jsxExpressionContainer(t.stringLiteral(payload.text))` rather than raw `t.jsxText()`, preventing arbitrary JSX expression or tag injection into `.tsx`/`.jsx` source files while maintaining lossless round-tripping in `inspectJsxTextChildren`.
+- **Local API CSRF & DNS Rebinding Protection (`src/server/apiMiddleware.ts`, `src/canvas/CanvasApp.tsx`, `vite.config.ts`)**: Added `verifyApiRequestSecurity` and `isLoopbackHostHeader` to block non-loopback `Host` headers (`127.0.0.1`, `localhost`, `[::1]`), reject cross-site `Sec-Fetch-Site` and non-loopback `Origin` headers, require `Content-Type: application/json` on all `POST /api/*` routes, and set `server.cors: false` and `server.allowedHosts` in `vite.config.ts`.
+- **Canonical Realpath & Symlink Traversal Guard (`src/server/astEngine.ts`)**: Hardened `resolveSafeScreenPath` using `fs.realpathSync` and `fs.lstatSync` to block symbolic links inside `src/screens/`, `screens/`, `app/`, and `src/app/` from escaping outside allowed screen directories, and added prototype-pollution/type guards (`__proto__`, `constructor`, `prototype`, `NaN`, `Infinity`) in `upsertObjectProperty`.
+- **Bounded Request Body Stream & Layout Schema Validation (`src/server/apiMiddleware.ts`)**: Updated `readJsonBody` to track byte length and immediately call `req.destroy()` when payloads exceed `1,000,000` bytes (preventing stream heap exhaustion), and added `sanitizeLayoutPayload` to validate `.canvas-layout.json` screen coordinate schemas.
+- **DOM Selector Escaping, `tsconfig.json` Alias Confinement & CLI Port Validation (`src/canvas/ScreenArtboard.tsx`, `vite.config.ts`, `bin/cli.mjs`)**: Added `CSS.escape` when querying `data-agy-ast-path` in `ScreenArtboard.tsx`, replaced the naive comment regex in `vite.config.ts` with a string-aware JSONC comment stripper while confining `tsconfig.json` aliases to the project root and protecting core studio packages, and added integer range validation (`1`–`65535`) for `--port` in `bin/cli.mjs`.
+
 ## [1.4.0] - 2026-10-21
 
 ### Added

@@ -210,7 +210,12 @@ Usage:
   const portFlagIdx = args.indexOf('--port');
   let port;
   if (portFlagIdx !== -1 && args[portFlagIdx + 1]) {
-    port = String(args[portFlagIdx + 1]);
+    const parsedPort = Number.parseInt(String(args[portFlagIdx + 1]), 10);
+    if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
+      console.error(`Error: Invalid --port value "${args[portFlagIdx + 1]}". Must be an integer between 1 and 65535.`);
+      process.exit(1);
+    }
+    port = String(parsedPort);
   } else {
     const resolvedPort = await findAvailablePort(5173);
     port = String(resolvedPort);

@@ -14,14 +14,37 @@ const targetProjectRoot = process.env.ANTIGRAVITY_TARGET_PROJECT
 
 const mockNavShimPath = path.resolve(__dirname, 'src/runtime/MockNavigationContext.tsx');
 
+const PROTECTED_CORE_ALIASES = new Set([
+  'react',
+  'react-dom',
+  'react-native',
+  'react-native-web',
+  'lucide-react',
+  'lucide-react-native',
+  '@react-navigation/native',
+  'expo-router',
+  'react-native-safe-area-context',
+  'expo-status-bar',
+  '__proto__',
+  'constructor',
+  'prototype',
+]);
+
+function stripJsonComments(input: string): string {
+  return input.replace(
+    /("(?:\\.|[^"\\])*")|\/\*[\s\S]*?\*\/|\/\/.*/g,
+    (_match, quotedString?: string) => quotedString ?? ''
+  );
+}
+
 function resolveTargetProjectPathAliases(projectRoot: string): Record<string, string> {
+  const normalizedRoot = path.resolve(projectRoot);
   const aliases: Record<string, string> = {};
   try {
-    const tsconfigPath = path.join(projectRoot, 'tsconfig.json');
+    const tsconfigPath = path.join(normalizedRoot, 'tsconfig.json');
     if (!fs.existsSync(tsconfigPath)) return aliases;
     const raw = fs.readFileSync(tsconfigPath, 'utf-8');
-    // Strip single-line and multi-line comments before JSON.parse
-    const cleaned = raw.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
+    const cleaned = stripJsonComments(raw);
     const parsed = JSON.parse(cleaned) as {
       compilerOptions?: {
         baseUrl?: string;
@@ -33,13 +56,20 @@ function resolveTargetProjectPathAliases(projectRoot: string): Record<string, st
     for (const [pattern, targets] of Object.entries(paths)) {
       if (!targets || targets.length === 0) continue;
       const cleanKey = pattern.replace(/\/\*$/, '');
+      if (!cleanKey || PROTECTED_CORE_ALIASES.has(cleanKey)) continue;
       const cleanTarget = targets[0].replace(/\/\*$/, '');
-      aliases[cleanKey] = path.resolve(projectRoot, baseUrl, cleanTarget);
+      const resolvedTarget = path.resolve(normalizedRoot, baseUrl, cleanTarget);
+      if (
+        resolvedTarget === normalizedRoot ||
+        resolvedTarget.startsWith(normalizedRoot + path.sep)
+      ) {
+        aliases[cleanKey] = resolvedTarget;
+      }
     }
   } catch {
     // Fallback to standard @ alias if tsconfig parsing fails
-    const srcDir = path.join(projectRoot, 'src');
-    aliases['@'] = fs.existsSync(srcDir) ? srcDir : projectRoot;
+    const srcDir = path.join(normalizedRoot, 'src');
+    aliases['@'] = fs.existsSync(srcDir) ? srcDir : normalizedRoot;
   }
   return aliases;
 }
@@ -74,6 +104,8 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 5173,
     strictPort: false,
+    cors: false,
+    allowedHosts: ['127.0.0.1', 'localhost', '::1'],
     fs: {
       allow: [__dirname, targetProjectRoot],
     },

@@ -244,7 +244,11 @@ export const CanvasApp: React.FC = () => {
 
   // Undo & Redo handlers
   const handleUndo = useCallback(async () => {
-    const res = await fetch('/api/undo', { method: 'POST' });
+    const res = await fetch('/api/undo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
     const data = (await res.json()) as {
       ok: boolean;
       restoredFile: string | null;
@@ -265,7 +269,11 @@ export const CanvasApp: React.FC = () => {
   }, [selectedElement, inspectSelectedElement, fetchScreens]);
 
   const handleRedo = useCallback(async () => {
-    const res = await fetch('/api/redo', { method: 'POST' });
+    const res = await fetch('/api/redo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
     const data = (await res.json()) as {
       ok: boolean;
       restoredFile: string | null;

@@ -115,24 +115,36 @@ export function resolveScreensDirectory(projectRoot: string): {
   };
 }
 
+const FORBIDDEN_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function safeRealpath(targetPath: string): string {
+  try {
+    return fsSync.realpathSync(targetPath);
+  } catch {
+    return path.resolve(targetPath);
+  }
+}
+
 /**
  * Validates that a relative file path stays strictly inside the project's screens directory
- * (`src/screens`, `screens`, or `app`) and ends with `.tsx` or `.jsx`. Prevents path traversal attacks.
+ * (`src/screens`, `screens`, or `app`) and ends with `.tsx` or `.jsx`.
+ * Prevents lexical path traversal (`../`) and symbolic link escape attacks.
  */
 export function resolveSafeScreenPath(workspaceRoot: string, relativeFile: string): string {
-  const normalizedRoot = getActiveProjectRoot(workspaceRoot);
-  const cleanRel = relativeFile.replace(/^[/\\]+/, '');
+  const normalizedRoot = safeRealpath(getActiveProjectRoot(workspaceRoot));
+  const cleanRel = String(relativeFile ?? '').replace(/^[/\\]+/, '');
   const resolved = path.resolve(normalizedRoot, cleanRel);
 
-  const allowedDirs = ['src/screens', 'screens', 'app', 'src/app'].map((d) =>
-    path.resolve(normalizedRoot, d)
-  );
+  const allowedDirs = ['src/screens', 'screens', 'app', 'src/app'].map((d) => {
+    const candidate = path.resolve(normalizedRoot, d);
+    return fsSync.existsSync(candidate) ? safeRealpath(candidate) : candidate;
+  });
 
-  const isInsideAllowed = allowedDirs.some(
+  const isLexicallyAllowed = allowedDirs.some(
     (dir) => resolved.startsWith(dir + path.sep) || resolved === dir
   );
 
-  if (!isInsideAllowed) {
+  if (!isLexicallyAllowed) {
     throw new Error(
       `Security violation: File path "${relativeFile}" is outside allowed screen directories (src/screens, screens, app)`
     );
@@ -140,6 +152,27 @@ export function resolveSafeScreenPath(workspaceRoot: string, relativeFile: strin
   if (!resolved.endsWith('.tsx') && !resolved.endsWith('.jsx')) {
     throw new Error(`Invalid file extension for "${relativeFile}". Only .tsx and .jsx are allowed.`);
   }
+
+  // Reject symbolic links or symlinked ancestor directories that escape the allowed screens directories
+  if (fsSync.existsSync(resolved)) {
+    const stat = fsSync.lstatSync(resolved);
+    if (stat.isSymbolicLink()) {
+      throw new Error(
+        `Security violation: Symbolic link "${relativeFile}" is not permitted inside screen directories`
+      );
+    }
+    const realTarget = safeRealpath(resolved);
+    const isRealInsideAllowed = allowedDirs.some(
+      (dir) => realTarget.startsWith(dir + path.sep) || realTarget === dir
+    );
+    if (!isRealInsideAllowed) {
+      throw new Error(
+        `Security violation: Canonical path for "${relativeFile}" resolves outside allowed screen directories`
+      );
+    }
+    return realTarget;
+  }
+
   return resolved;
 }
 
@@ -638,11 +671,25 @@ export async function inspectElement(
   };
 }
 
+function createSafeJsxTextChild(text: string): t.JSXText | t.JSXExpressionContainer {
+  // @babel/generator prints JSXText.value verbatim without escaping '{', '}', '<', or '>'.
+  // Wrap any string containing JSX metacharacters, newlines, or leading/trailing whitespace
+  // inside a JSXExpressionContainer(StringLiteral) so Babel safely escapes it as {"..."}.
+  if (/[{}<>]|[\r\n]|^\s|\s$/.test(text)) {
+    return t.jsxExpressionContainer(t.stringLiteral(text));
+  }
+  return t.jsxText(text);
+}
+
 function upsertObjectProperty(
   objExpr: t.ObjectExpression,
   key: string,
   val: StyleValue | null | undefined
 ) {
+  if (!key || FORBIDDEN_OBJECT_KEYS.has(key) || key.length > 80) {
+    throw new Error(`Security violation: Invalid style property name "${key}"`);
+  }
+
   const existingIndex = objExpr.properties.findIndex((prop) => {
     if (!t.isObjectProperty(prop)) return false;
     const k = t.isIdentifier(prop.key)
@@ -660,8 +707,22 @@ function upsertObjectProperty(
     return;
   }
 
+  if (typeof val !== 'number' && typeof val !== 'string') {
+    throw new Error(`Security violation: Style value for "${key}" must be a string or finite number`);
+  }
+  if (typeof val === 'number' && !Number.isFinite(val)) {
+    throw new Error(`Security violation: Style value for "${key}" must be a finite number`);
+  }
+  if (typeof val === 'string' && val.length > 500) {
+    throw new Error(`Security violation: Style value for "${key}" exceeds maximum length`);
+  }
+
   const valueNode =
-    typeof val === 'number' ? t.numericLiteral(val) : t.stringLiteral(String(val));
+    typeof val === 'number'
+      ? val < 0
+        ? t.unaryExpression('-', t.numericLiteral(Math.abs(val)))
+        : t.numericLiteral(val)
+      : t.stringLiteral(val);
 
   if (existingIndex !== -1) {
     const existingProp = objExpr.properties[existingIndex] as t.ObjectProperty;
@@ -727,13 +788,16 @@ export async function patchElement(
     const opening = element.openingElement;
 
     if (payload.text !== undefined) {
+      if (typeof payload.text !== 'string') {
+        throw new Error('Invalid text payload: must be a string.');
+      }
       const textCheck = inspectJsxTextChildren(element);
       if (textCheck.hasDynamicText) {
         throw new Error(
           'Cannot overwrite dynamic JSX expression inside <Text>. Use "Ask Antigravity" for structural/expression edits.'
         );
       }
-      element.children = [t.jsxText(payload.text)];
+      element.children = [createSafeJsxTextChild(payload.text)];
     }
 
     if (payload.styles && Object.keys(payload.styles).length > 0) {

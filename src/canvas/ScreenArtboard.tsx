@@ -101,8 +101,12 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
     }
 
     const updateSelectionOverlay = () => {
+      const safeAstPath =
+        typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+          ? CSS.escape(selectedElement.astPath)
+          : selectedElement.astPath.replace(/["\\]/g, '\\$&');
       const match = container.querySelector<HTMLElement>(
-        `[data-agy-ast-path="${selectedElement.astPath}"]`
+        `[data-agy-ast-path="${safeAstPath}"]`
       );
       if (match) {
         setSelectedBox(computeRelativeBox(match));
