@@ -24,8 +24,8 @@
     "figma"
   ],
   "bin": {
-    "zelune": "./bin/cli.mjs",
-    "antigravity-rn-canvas": "./bin/cli.mjs"
+    "zelune": "bin/cli.mjs",
+    "antigravity-rn-canvas": "bin/cli.mjs"
   },
   "files": [
     "bin/",
