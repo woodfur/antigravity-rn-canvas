@@ -6,12 +6,15 @@ import { viteRnSourceInject } from './plugins/viteRnSourceInject';
 import { viteCanvasApiMiddleware } from './src/server/apiMiddleware';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const targetProjectRoot = process.env.ANTIGRAVITY_TARGET_PROJECT
+  ? path.resolve(process.env.ANTIGRAVITY_TARGET_PROJECT)
+  : __dirname;
 
 export default defineConfig({
   plugins: [
-    viteRnSourceInject(__dirname),
+    viteRnSourceInject(targetProjectRoot),
     react(),
-    viteCanvasApiMiddleware(__dirname),
+    viteCanvasApiMiddleware(targetProjectRoot),
   ],
   resolve: {
     alias: {

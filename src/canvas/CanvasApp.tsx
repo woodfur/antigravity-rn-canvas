@@ -59,6 +59,7 @@ function buildDefaultLayout(screens: ScreenMetadata[]): ArtboardLayoutMap {
 
 export const CanvasApp: React.FC = () => {
   const [screens, setScreens] = useState<ScreenMetadata[]>([]);
+  const [projectName, setProjectName] = useState<string>('Google Artifact');
   const [layout, setLayout] = useState<ArtboardLayoutMap>({});
   const [mode, setMode] = useState<CanvasMode>('inspect');
   const [showFlows, setShowFlows] = useState<boolean>(true);
@@ -128,6 +129,7 @@ export const CanvasApp: React.FC = () => {
       ]);
       const screensJson = (await screensRes.json()) as {
         ok: boolean;
+        projectName?: string;
         screens: ScreenMetadata[];
         history?: { undoAvailable: number; redoAvailable: number };
       };
@@ -137,6 +139,9 @@ export const CanvasApp: React.FC = () => {
       };
 
       if (screensJson.ok) {
+        if (screensJson.projectName) {
+          setProjectName(screensJson.projectName);
+        }
         const sorted = sortScreensByOrder(screensJson.screens);
         setScreens(sorted);
         if (screensJson.history) {
@@ -606,35 +611,18 @@ export const CanvasApp: React.FC = () => {
             ZL
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: '-0.02em', color: '#F8FAFC' }}>
-                Zelune Visual Canvas
-              </span>
-              <span
-                className="tabular-nums"
-                style={{
-                  fontSize: 10,
-                  fontFamily: 'var(--font-mono)',
-                  color: '#94A3B8',
-                  backgroundColor: 'var(--studio-surface-2)',
-                  border: '1px solid var(--studio-border-hairline)',
-                  padding: '1px 6px',
-                  borderRadius: 4,
-                }}
-              >
-                {screens.length} ARTBOARDS
-              </span>
+            <div style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: '-0.02em', color: '#F8FAFC' }}>
+              Zelune
             </div>
             <div
-              className="tabular-nums"
               style={{
-                fontSize: 10.5,
-                color: 'var(--studio-text-muted)',
+                fontSize: 11,
+                color: 'var(--studio-text-secondary)',
                 fontFamily: 'var(--font-mono)',
                 marginTop: 1,
               }}
             >
-              AST Sync MCP · Taste Dials [V:2 M:6 D:{density === 'compact' ? '8' : '5'}]
+              {projectName}
             </div>
           </div>
         </div>

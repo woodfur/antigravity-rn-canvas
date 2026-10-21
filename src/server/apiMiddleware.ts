@@ -41,6 +41,31 @@ function sendJson(res: ServerResponse, status: number, payload: unknown) {
 export function viteCanvasApiMiddleware(workspaceRoot: string): Plugin {
   const layoutFilePath = path.resolve(workspaceRoot, '.canvas-layout.json');
 
+  async function resolveConnectedProjectName(): Promise<string> {
+    const dirName = path.basename(workspaceRoot);
+    try {
+      const appJsonRaw = await fs.readFile(path.join(workspaceRoot, 'app.json'), 'utf-8');
+      const appJson = JSON.parse(appJsonRaw) as {
+        expo?: { name?: string };
+        name?: string;
+      };
+      if (appJson?.expo?.name) return appJson.expo.name;
+      if (appJson?.name) return appJson.name;
+    } catch {
+      // No app.json present
+    }
+    try {
+      const pkgRaw = await fs.readFile(path.join(workspaceRoot, 'package.json'), 'utf-8');
+      const pkg = JSON.parse(pkgRaw) as { name?: string };
+      if (pkg?.name && pkg.name.toLowerCase() !== 'zelune') {
+        return pkg.name;
+      }
+    } catch {
+      // Fallback to directory name
+    }
+    return dirName;
+  }
+
   return {
     name: 'vite-canvas-api-middleware',
     configureServer(server) {
@@ -55,9 +80,12 @@ export function viteCanvasApiMiddleware(workspaceRoot: string): Plugin {
         try {
           // GET /api/screens
           if (req.method === 'GET' && pathname === '/api/screens') {
-            const screens = await discoverScreens(workspaceRoot);
+            const [screens, projectName] = await Promise.all([
+              discoverScreens(workspaceRoot),
+              resolveConnectedProjectName(),
+            ]);
             const history = getHistoryStatus();
-            return sendJson(res, 200, { ok: true, screens, history });
+            return sendJson(res, 200, { ok: true, projectName, screens, history });
           }
 
           // GET /api/inspect?file=...&astPath=...&line=...

@@ -6,6 +6,7 @@ All notable changes to the **Zelune — React Native Visual Canvas & MCP** proje
 
 ### Added
 - **Collapsible Studio Side Panels (`src/canvas/CanvasApp.tsx`, `src/canvas/InspectorPanel.tsx`, `src/styles.css`)**: Added collapsible left (Screens Navigator) and right (AST Visual Inspector) sidebars with top-bar toggles, inline panel close buttons, floating canvas restore pills when collapsed, `[` and `]` keyboard shortcuts, auto-expand on element selection, and `220ms` `--ease-out-expo` width choreography.
+- **Minimal Studio Header Identity (`src/canvas/CanvasApp.tsx`, `src/server/apiMiddleware.ts`, `vite.config.ts`)**: Simplified the top-left studio brand header to display **Zelune** and the connected project name (`projectName` resolved from `app.json`, `package.json`, or target workspace directory).
 
 ### Fixed
 - **Browser Whole-Page Trackpad Pinch-Zoom Leak (`src/canvas/CanvasApp.tsx`, `src/styles.css`)**: Replaced React's passive `onWheel` handler with non-passive (`{ passive: false }`) native `wheel` and WebKit `gesturestart`/`gesturechange`/`gestureend` listeners plus `touch-action: none` and `overscroll-behavior: none`, preventing native browser page zoom anywhere in the studio and routing two-finger trackpad pinches into cursor-centered focal canvas zooming.
