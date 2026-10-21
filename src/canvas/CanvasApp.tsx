@@ -642,8 +642,8 @@ export const CanvasApp: React.FC = () => {
               type="button"
               className="zelune-interactive zelune-icon-reveal-btn"
               onClick={() => setMode('inspect')}
-              title="Inspect & Edit AST"
-              aria-label="Inspect & Edit AST"
+              title="Inspect & Edit"
+              aria-label="Inspect & Edit"
               style={{
                 padding: '6px 9px',
                 borderRadius: 5,
@@ -656,7 +656,7 @@ export const CanvasApp: React.FC = () => {
               }}
             >
               <MousePointer size={14} style={{ flexShrink: 0 }} />
-              <span className="zelune-reveal-label">Inspect &amp; Edit AST</span>
+              <span className="zelune-reveal-label">Inspect &amp; Edit</span>
             </button>
 
             <button
