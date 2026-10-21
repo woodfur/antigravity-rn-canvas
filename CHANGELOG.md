@@ -2,6 +2,11 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.5.2] - 2026-10-21
+
+### Changed
+- **npm Package Documentation (`README.md`)**: Simplified installation and MCP configuration snippets on npm to use `npm install -g zelune` and `npx zelune` directly instead of the GitHub repository URL.
+
 ## [1.5.1] - 2026-10-21
 
 ### Fixed
