@@ -2,6 +2,16 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.5.3] - 2026-10-23
+
+### Added
+- **Studio Light Mode & Dark Mode Theme Toggle (`index.html`, `src/styles.css`, `src/canvas/CanvasApp.tsx`, `src/canvas/InspectorPanel.tsx`, `src/canvas/ScreenArtboard.tsx`, `src/canvas/FlowArrowsLayer.tsx`)**: Added a studio-wide Light/Dark color-scheme toggle (`Sun` / `Moon` button in the top-right toolbar) using `<meta name="color-scheme">`, `:root:has(> head > meta[name="color-scheme"][content="light"|"dark"])`, `light-dark()` tokens with `@supports` and `@media (prefers-color-scheme: dark)` fallbacks, high-contrast semantic badge tokens (`--studio-badge-indigo-*`, `--studio-badge-emerald-*`), zero-FOUC inline `<head>` script, and cross-tab `storage` event synchronization while isolating device artboard viewports so React Native screens render faithfully.
+- **Universal Expo & React Native Ecosystem Web Shims (`src/runtime/MockNavigationContext.tsx`, `plugins/viteReactNativeFallbackPlugin.ts`)**: Added built-in web shims for `@expo/vector-icons`, `expo-linear-gradient`, `expo-blur`, `expo-image`, `react-native-svg`, `react-native-reanimated`, `react-native-gesture-handler`, `expo-haptics`, `expo-constants`, `expo-font`, `expo-splash-screen`, `expo-secure-store`, `expo-clipboard`, `expo-linking`, `@react-native-async-storage/async-storage`, and `@shopify/flash-list`, plus a dynamic AST-aware fallback plugin (`viteReactNativeFallbackPlugin`) that synthesizes named export stubs for any additional native or unresolved bare packages imported by external screens.
+
+### Fixed
+- **External Project Blank Screen Fix via Dynamic Per-Screen Isolation & `process.env` / `require` Polyfill (`plugins/viteVirtualScreensPlugin.ts`, `vite.config.ts`, `src/server/astEngine.ts`)**: Replaced static top-level `import *` statements in `virtual:zelune-screens` with per-screen dynamic `import()` React wrappers (`createIsolatedScreenComponent`) so a broken import or top-level error in any individual screen renders a diagnostic card inside that screen's artboard rather than blanking out `#root`. Added automatic `EXPO_PUBLIC_*` `.env` loading, a safe `window.process.env` Proxy (so SDK initializers like `createClient(process.env.EXPO_PUBLIC_SUPABASE_URL, ...)` never throw on load), and a `window.require` polyfill for React Native asset `require('./image.png')` calls.
+- **Double-Click On-Canvas Inline `<Text>` Editing (`src/canvas/ScreenArtboard.tsx`)**: Fixed an async race condition where `fetch('/api/inspect')` resolving ~15ms after the first click of a double-click reset `isEditingInlineText` back to `false` and closed the inline `<textarea>`. Gated `isEditingInlineText` resets strictly on selection identity changes (`${screenId}:${astPath}`), added synchronous DOM text extraction (`resolveTextTargetForDoubleClick`) so double-clicking `<Text>` or a parent button/badge immediately opens the inline editor, and persisted the target's `file`/`astPath`/`line` in `inlineEditTargetRef` for reliable AST commits.
+
 ## [1.5.2] - 2026-10-21
 
 ### Changed

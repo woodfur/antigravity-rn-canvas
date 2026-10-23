@@ -119,6 +119,8 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
   // Inline Double-Click Text Editing State
   const [isEditingInlineText, setIsEditingInlineText] = useState<boolean>(false);
   const [inlineTextDraft, setInlineTextDraft] = useState<string>('');
+  const initialInlineTextRef = useRef<string>('');
+  const prevSelectionKeyRef = useRef<string | null>(null);
 
   const isSelectedOnThisScreen =
     Boolean(selectedElement) && selectedElement?.screenId === screen.id;
@@ -159,9 +161,21 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
     [zoom]
   );
 
+  // Only close inline text editor when the selected element identity (screenId:astPath) actually changes
+  const selectionIdentityKey =
+    isSelectedOnThisScreen && selectedElement
+      ? `${selectedElement.screenId}:${selectedElement.astPath}`
+      : null;
+
+  useEffect(() => {
+    if (prevSelectionKeyRef.current !== selectionIdentityKey) {
+      prevSelectionKeyRef.current = selectionIdentityKey;
+      setIsEditingInlineText(false);
+    }
+  }, [selectionIdentityKey]);
+
   // Keep selected element bounding box updated when screen re-renders or styles change
   useEffect(() => {
-    setIsEditingInlineText(false);
     if (!isSelectedOnThisScreen) {
       setSelectedBox(null);
       return;
@@ -196,19 +210,44 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
     }
   }, [isEditingInlineText]);
 
-  const startInlineTextEdit = useCallback(() => {
-    if (!activeInspected || !activeInspected.isTextEditable) return;
-    setInlineTextDraft(activeInspected.textContent ?? '');
-    setIsEditingInlineText(true);
-  }, [activeInspected]);
+  const startInlineTextEdit = useCallback(
+    (explicitDomEl?: HTMLElement | null) => {
+      const domEl = explicitDomEl ?? getSelectedDomNode();
+      if (!domEl) return;
+
+      const domTag = domEl.dataset.agyTag || '';
+      const isDomTextNode =
+        domTag === 'Text' ||
+        domTag.endsWith('.Text') ||
+        (domEl.querySelectorAll('[data-agy-ast-path]').length === 0 &&
+          Boolean(domEl.textContent?.trim()));
+
+      if (activeInspected && activeInspected.astPath === domEl.dataset.agyAstPath) {
+        if (!activeInspected.isTextEditable && !isDomTextNode) return;
+        const initialVal = activeInspected.textContent ?? domEl.textContent?.trim() ?? '';
+        initialInlineTextRef.current = initialVal;
+        setInlineTextDraft(initialVal);
+        setIsEditingInlineText(true);
+        return;
+      }
+
+      if (!isDomTextNode) return;
+      const initialVal = domEl.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+      initialInlineTextRef.current = initialVal;
+      setInlineTextDraft(initialVal);
+      setIsEditingInlineText(true);
+    },
+    [activeInspected, getSelectedDomNode]
+  );
 
   const commitInlineTextEdit = useCallback(() => {
-    if (!isEditingInlineText || !selectedElement || !activeInspected) {
+    if (!isEditingInlineText || !selectedElement) {
       setIsEditingInlineText(false);
       return;
     }
     setIsEditingInlineText(false);
-    if (inlineTextDraft !== (activeInspected.textContent ?? '')) {
+    const baselineText = activeInspected?.textContent ?? initialInlineTextRef.current;
+    if (inlineTextDraft !== baselineText) {
       void onPatchElement({
         file: selectedElement.file,
         astPath: selectedElement.astPath,
@@ -722,14 +761,28 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
     }
   };
 
+  const resolveTextTargetForDoubleClick = (rawTarget: HTMLElement): HTMLElement => {
+    const tag = rawTarget.dataset.agyTag || '';
+    if (tag === 'Text' || tag.endsWith('.Text')) {
+      return rawTarget;
+    }
+    const childTextNodes = rawTarget.querySelectorAll<HTMLElement>('[data-agy-tag="Text"]');
+    if (childTextNodes.length === 1) {
+      return childTextNodes[0];
+    }
+    return rawTarget;
+  };
+
   const handleClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
     if (mode !== 'inspect' || isEditingInlineText) return;
     e.stopPropagation();
     e.preventDefault();
 
     onSelectScreen(screen.id);
-    const targetEl = findNearestAgyElement(e.target, viewportRef.current);
-    if (!targetEl) return;
+    const rawTargetEl = findNearestAgyElement(e.target, viewportRef.current);
+    if (!rawTargetEl) return;
+
+    const targetEl = e.detail >= 2 ? resolveTextTargetForDoubleClick(rawTargetEl) : rawTargetEl;
 
     const file = targetEl.dataset.agyFile || screen.filePath;
     const astPath = targetEl.dataset.agyAstPath || '0';
@@ -737,34 +790,42 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
     const col = Number.parseInt(targetEl.dataset.agyCol || '0', 10);
     const tagName = targetEl.dataset.agyTag || 'View';
 
+    const isAlreadySelected =
+      selectedElement?.screenId === screen.id && selectedElement?.astPath === astPath;
+
     setSelectedBox(computeRelativeBox(targetEl));
-    onSelectElement({
-      screenId: screen.id,
-      file,
-      astPath,
-      line,
-      col,
-      tagName,
-    });
+    if (!isAlreadySelected) {
+      onSelectElement({
+        screenId: screen.id,
+        file,
+        astPath,
+        line,
+        col,
+        tagName,
+      });
+    }
+
+    if (e.detail >= 2) {
+      startInlineTextEdit(targetEl);
+    }
   };
 
   const handleDoubleClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
     if (mode !== 'inspect') return;
-    const targetEl = findNearestAgyElement(e.target, viewportRef.current);
-    if (!targetEl) return;
+    const rawTargetEl = findNearestAgyElement(e.target, viewportRef.current);
+    if (!rawTargetEl) return;
 
     e.stopPropagation();
     e.preventDefault();
-    if (activeInspected?.isTextEditable) {
-      startInlineTextEdit();
-    }
+    const targetEl = resolveTextTargetForDoubleClick(rawTargetEl);
+    startInlineTextEdit(targetEl);
   };
 
   const borderColor = isHighlightedScreen
     ? '#10B981'
     : isActiveScreen
       ? '#38BDF8'
-      : 'rgba(255, 255, 255, 0.09)';
+      : 'var(--studio-border-strong)';
 
   const toolbarAbove = !selectedBox || selectedBox.top >= 30;
 
@@ -796,7 +857,7 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
           justifyContent: 'space-between',
           padding: '0 4px',
           cursor: isDraggingHeader ? 'grabbing' : 'grab',
-          color: isActiveScreen ? '#38BDF8' : '#94A3B8',
+          color: isActiveScreen ? '#0284C7' : 'var(--studio-text-secondary)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -806,7 +867,7 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
               fontSize: 13,
               fontWeight: 600,
               letterSpacing: '-0.015em',
-              color: isActiveScreen ? '#F8FAFC' : '#CBD5E1',
+              color: isActiveScreen ? 'var(--studio-text-primary)' : 'var(--studio-text-secondary)',
             }}
           >
             {screen.name}
@@ -815,7 +876,7 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
             style={{
               fontSize: 11,
               fontFamily: 'var(--font-mono)',
-              color: '#64748B',
+              color: 'var(--studio-text-muted)',
             }}
           >
             /{screen.routeName}
@@ -828,7 +889,7 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
             style={{
               fontSize: 10.5,
               fontFamily: 'var(--font-mono)',
-              color: '#64748B',
+              color: 'var(--studio-text-muted)',
             }}
           >
             {position.width} × {position.height}
@@ -850,7 +911,7 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
               borderRadius: 5,
               border: '1px solid var(--studio-border-subtle)',
               backgroundColor: 'var(--studio-surface-2)',
-              color: '#94A3B8',
+              color: 'var(--studio-text-secondary)',
               cursor: 'pointer',
             }}
           >

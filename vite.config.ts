@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { viteRnSourceInject } from './plugins/viteRnSourceInject';
 import { viteVirtualScreensPlugin } from './plugins/viteVirtualScreensPlugin';
+import { viteReactNativeFallbackPlugin } from './plugins/viteReactNativeFallbackPlugin';
 import { viteCanvasApiMiddleware } from './src/server/apiMiddleware';
 import { findMobileAppRoot } from './src/server/astEngine';
 
@@ -56,6 +57,54 @@ function stripJsonComments(input: string): string {
   );
 }
 
+/**
+ * Loads only safe client-public environment variables (EXPO_PUBLIC_*, NEXT_PUBLIC_*, VITE_*)
+ * from the target project's .env files so top-level SDK initializers in mobile screens work.
+ */
+function loadPublicProjectEnv(roots: string[]): Record<string, string> {
+  const publicEnv: Record<string, string> = {
+    NODE_ENV: 'development',
+    EXPO_PUBLIC_PLATFORM: 'web',
+  };
+  const envFiles = ['.env', '.env.development', '.env.local'];
+  const uniqueRoots = Array.from(new Set(roots.map((r) => path.resolve(r))));
+
+  for (const rootDir of uniqueRoots) {
+    for (const fileName of envFiles) {
+      const fullPath = path.join(rootDir, fileName);
+      try {
+        if (!fs.existsSync(fullPath)) continue;
+        const raw = fs.readFileSync(fullPath, 'utf-8');
+        for (const line of raw.split(/\r?\n/)) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) continue;
+          const eqIdx = trimmed.indexOf('=');
+          if (eqIdx <= 0) continue;
+          const key = trimmed.slice(0, eqIdx).trim();
+          if (
+            !key.startsWith('EXPO_PUBLIC_') &&
+            !key.startsWith('NEXT_PUBLIC_') &&
+            !key.startsWith('VITE_')
+          ) {
+            continue;
+          }
+          let val = trimmed.slice(eqIdx + 1).trim();
+          if (
+            (val.startsWith('"') && val.endsWith('"')) ||
+            (val.startsWith("'") && val.endsWith("'"))
+          ) {
+            val = val.slice(1, -1);
+          }
+          publicEnv[key] = val;
+        }
+      } catch {
+        // Ignore unreadable .env files
+      }
+    }
+  }
+  return publicEnv;
+}
+
 function resolveTargetProjectPathAliases(projectRoot: string): Record<string, string> {
   const normalizedRoot = path.resolve(projectRoot);
   const aliases: Record<string, string> = {};
@@ -98,16 +147,57 @@ function resolveTargetProjectPathAliases(projectRoot: string): Record<string, st
   return aliases;
 }
 
+const publicProjectEnv = loadPublicProjectEnv([rawTargetRoot, targetProjectRoot]);
+
 export default defineConfig({
   plugins: [
+    {
+      name: 'vite-zelune-process-env-shim',
+      transformIndexHtml(html) {
+        const serializedEnv = JSON.stringify(publicProjectEnv);
+        const envScript = `<script>
+(function() {
+  var baseEnv = ${serializedEnv};
+  var envProxy = new Proxy(baseEnv, {
+    get: function(target, prop) {
+      if (typeof prop !== 'string') return target[prop];
+      if (prop in target && target[prop] !== undefined && target[prop] !== '') {
+        return target[prop];
+      }
+      var upper = prop.toUpperCase();
+      if (upper.includes('URL') || upper.includes('ENDPOINT') || upper.includes('HOST')) {
+        return 'https://placeholder.example.com';
+      }
+      if (upper.includes('KEY') || upper.includes('TOKEN') || upper.includes('ID') || upper.includes('SECRET')) {
+        return 'placeholder-public-token';
+      }
+      return '';
+    }
+  });
+  window.global = window;
+  window.__DEV__ = true;
+  window.process = window.process || { env: envProxy, platform: 'browser', version: '', cwd: function() { return '/'; } };
+  window.process.env = envProxy;
+  window.require = window.require || function(modId) {
+    if (typeof modId === 'string' && /\\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(modId)) {
+      return { uri: modId, default: modId };
+    }
+    return {};
+  };
+})();
+</script>`;
+        return html.replace('<head>', `<head>\n    ${envScript}`);
+      },
+    },
+    viteReactNativeFallbackPlugin(targetProjectRoot, mockNavShimPath),
     viteVirtualScreensPlugin(targetProjectRoot),
     viteRnSourceInject(targetProjectRoot),
     react(),
     viteCanvasApiMiddleware(targetProjectRoot),
   ],
   esbuild: {
-    // Ensure .tsx/.ts/.jsx files are transpiled even when zelune is installed inside node_modules/zelune
-    include: /\.(tsx|ts|jsx)$/,
+    // Ensure .tsx/.ts/.jsx/.js files (including RN .js files with JSX) are transpiled cleanly
+    include: /\.(tsx|ts|jsx|js)$/,
     exclude: [],
     loader: 'tsx',
   },

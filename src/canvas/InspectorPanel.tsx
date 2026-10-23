@@ -197,7 +197,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                color: '#F8FAFC',
+                color: 'var(--studio-text-primary)',
                 fontWeight: 600,
                 fontSize: 13.5,
                 letterSpacing: '-0.01em',
@@ -238,11 +238,11 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 lineHeight: 1.6,
               }}
             >
-              Select any node on a <code style={{ color: '#38BDF8', fontFamily: 'var(--font-mono)' }}>393 × 852</code>{' '}
+              Select any node on a <code style={{ color: '#0284C7', fontFamily: 'var(--font-mono)' }}>393 × 852</code>{' '}
               artboard to inspect and live-patch its{' '}
-              <strong style={{ color: '#E2E8F0' }}>StyleSheet.create</strong> rules or{' '}
-              <strong style={{ color: '#E2E8F0' }}>static copy</strong> directly in the{' '}
-              <code style={{ color: '#A5B4FC', fontFamily: 'var(--font-mono)' }}>.tsx</code> AST.
+              <strong style={{ color: 'var(--studio-text-primary)' }}>StyleSheet.create</strong> rules or{' '}
+              <strong style={{ color: 'var(--studio-text-primary)' }}>static copy</strong> directly in the{' '}
+              <code style={{ color: '#6366F1', fontFamily: 'var(--font-mono)' }}>.tsx</code> AST.
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
@@ -258,15 +258,15 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 DESIGN &amp; SYNC GOVERNANCE
               </div>
               <div style={{ fontSize: 12, color: 'var(--studio-text-secondary)', lineHeight: 1.5 }}>
-                • <strong style={{ color: '#CBD5E1' }}>Tier 1 (Surgical AST)</strong>: Instant write-back to colors, typography, spacing, and copy.
+                • <strong style={{ color: 'var(--studio-text-primary)' }}>Tier 1 (Surgical AST)</strong>: Instant write-back to colors, typography, spacing, and copy.
               </div>
               <div style={{ fontSize: 12, color: 'var(--studio-text-secondary)', lineHeight: 1.5 }}>
-                • <strong style={{ color: '#CBD5E1' }}>Tier 2 (Antigravity Bridge)</strong>: Dispatch structural refactors with exact file &amp; AST path coordinates.
+                • <strong style={{ color: 'var(--studio-text-primary)' }}>Tier 2 (Antigravity Bridge)</strong>: Dispatch structural refactors with exact file &amp; AST path coordinates.
               </div>
               <div style={{ fontSize: 12, color: 'var(--studio-text-secondary)', lineHeight: 1.5 }}>
-                • <strong style={{ color: '#CBD5E1' }}>Impeccable &amp; Taste Guardrails</strong>: Governed by{' '}
-                <code style={{ fontFamily: 'var(--font-mono)', color: '#38BDF8' }}>PRODUCT.md</code> &amp;{' '}
-                <code style={{ fontFamily: 'var(--font-mono)', color: '#38BDF8' }}>DESIGN.md</code>.
+                • <strong style={{ color: 'var(--studio-text-primary)' }}>Impeccable &amp; Taste Guardrails</strong>: Governed by{' '}
+                <code style={{ fontFamily: 'var(--font-mono)', color: '#0284C7' }}>PRODUCT.md</code> &amp;{' '}
+                <code style={{ fontFamily: 'var(--font-mono)', color: '#0284C7' }}>DESIGN.md</code>.
               </div>
             </div>
           </div>
@@ -280,7 +280,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               paddingTop: 12,
             }}
           >
-            MCP Server: <span style={{ color: '#34D399' }}>Zelune Ready (mcp/server.ts)</span>
+            MCP Server: <span style={{ color: 'var(--studio-accent-emerald)' }}>Zelune Ready (mcp/server.ts)</span>
           </div>
         </div>
       ) : (
@@ -310,9 +310,9 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span
                   style={{
-                    backgroundColor: 'rgba(99, 102, 241, 0.18)',
-                    border: '1px solid rgba(99, 102, 241, 0.4)',
-                    color: '#C7D2FE',
+                    backgroundColor: 'var(--studio-badge-indigo-bg)',
+                    border: '1px solid var(--studio-badge-indigo-border)',
+                    color: 'var(--studio-badge-indigo-text)',
                     fontSize: 11.5,
                     fontWeight: 700,
                     fontFamily: 'var(--font-mono)',
@@ -325,10 +325,11 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 {inspected.styleSheetKey && (
                   <span
                     style={{
-                      backgroundColor: 'rgba(16, 185, 129, 0.14)',
-                      border: '1px solid rgba(16, 185, 129, 0.35)',
-                      color: '#A7F3D0',
+                      backgroundColor: 'var(--studio-badge-emerald-bg)',
+                      border: '1px solid var(--studio-badge-emerald-border)',
+                      color: 'var(--studio-badge-emerald-text)',
                       fontSize: 11,
+                      fontWeight: 600,
                       fontFamily: 'var(--font-mono)',
                       padding: '1px 6px',
                       borderRadius: 4,
@@ -396,11 +397,11 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             <div
               style={{
                 padding: '6px 16px',
-                backgroundColor: 'rgba(30, 27, 75, 0.65)',
-                borderBottom: '1px solid rgba(99, 102, 241, 0.3)',
+                backgroundColor: 'var(--studio-badge-indigo-bg)',
+                borderBottom: '1px solid var(--studio-badge-indigo-border)',
                 fontSize: 11,
                 fontFamily: 'var(--font-mono)',
-                color: '#A5B4FC',
+                color: 'var(--studio-badge-indigo-text)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -413,7 +414,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     ? 'Inspecting AST node...'
                     : statusMessage}
               </span>
-              <span style={{ color: '#34D399' }}>● AST Sync</span>
+              <span style={{ color: 'var(--studio-accent-emerald)', fontWeight: 600 }}>● AST Sync</span>
             </div>
           )}
 
@@ -423,16 +424,24 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               style={{
                 margin: '12px 14px 0',
                 padding: '9px 12px',
-                backgroundColor: 'rgba(6, 78, 59, 0.45)',
-                border: '1px solid rgba(16, 185, 129, 0.45)',
+                backgroundColor: 'var(--studio-badge-emerald-bg)',
+                border: '1px solid var(--studio-badge-emerald-border)',
                 borderRadius: 8,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#D1FAE5' }}>
-                <Navigation size={13} color="#34D399" />
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 12,
+                  color: 'var(--studio-badge-emerald-text)',
+                }}
+              >
+                <Navigation size={13} color="var(--studio-accent-emerald)" />
                 <span>
                   Flow → <strong>{inspected.navigationTarget}</strong>
                 </span>
@@ -485,11 +494,11 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       border: '1px solid var(--studio-border-subtle)',
                       borderRadius: 7,
                       fontSize: 11.5,
-                      color: '#CBD5E1',
+                      color: 'var(--studio-text-secondary)',
                       lineHeight: 1.5,
                     }}
                   >
-                    Contains dynamic JSX expression (<code style={{ color: '#38BDF8' }}>{'{...}'}</code>). Protected from static overwrite—use <strong>Ask Antigravity</strong> below to refactor expression logic.
+                    Contains dynamic JSX expression (<code style={{ color: '#0284C7' }}>{'{...}'}</code>). Protected from static overwrite—use <strong>Ask Antigravity</strong> below to refactor expression logic.
                   </div>
                 ) : (
                   <textarea
@@ -505,7 +514,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       borderRadius: 7,
                       paddingLeft: 10,
                       paddingRight: 10,
-                      color: '#F8FAFC',
+                      color: 'var(--studio-text-primary)',
                       fontSize: 12.5,
                       resize: 'vertical',
                       fontFamily: 'var(--font-sans)',
@@ -535,7 +544,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
               {/* Background Color */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                <label style={{ fontSize: 11.5, color: '#CBD5E1' }}>Background Color</label>
+                <label style={{ fontSize: 11.5, color: 'var(--studio-text-secondary)' }}>Background Color</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <input
                     type="color"
@@ -569,7 +578,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       borderRadius: 6,
                       paddingLeft: 10,
                       paddingRight: 10,
-                      color: '#F8FAFC',
+                      color: 'var(--studio-text-primary)',
                       fontSize: 12,
                       fontFamily: 'var(--font-mono)',
                     }}
@@ -591,7 +600,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                         border:
                           localStyles.backgroundColor === hex
                             ? '2px solid #38BDF8'
-                            : '1px solid rgba(255, 255, 255, 0.14)',
+                            : '1px solid var(--studio-border-strong)',
                         cursor: 'pointer',
                       }}
                     />
@@ -601,7 +610,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
               {/* Text Color */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                <label style={{ fontSize: 11.5, color: '#CBD5E1' }}>Text Color</label>
+                <label style={{ fontSize: 11.5, color: 'var(--studio-text-secondary)' }}>Text Color</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <input
                     type="color"
@@ -635,7 +644,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       borderRadius: 6,
                       paddingLeft: 10,
                       paddingRight: 10,
-                      color: '#F8FAFC',
+                      color: 'var(--studio-text-primary)',
                       fontSize: 12,
                       fontFamily: 'var(--font-mono)',
                     }}
@@ -680,7 +689,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       borderRadius: 6,
                       paddingLeft: 8,
                       paddingRight: 8,
-                      color: '#F8FAFC',
+                      color: 'var(--studio-text-primary)',
                       fontSize: 12,
                       fontFamily: 'var(--font-mono)',
                     }}
@@ -702,7 +711,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       borderRadius: 6,
                       paddingLeft: 8,
                       paddingRight: 8,
-                      color: '#F8FAFC',
+                      color: 'var(--studio-text-primary)',
                       fontSize: 12,
                       fontFamily: 'var(--font-mono)',
                     }}
@@ -761,7 +770,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                         borderRadius: 6,
                         paddingLeft: 8,
                         paddingRight: 8,
-                        color: '#F8FAFC',
+                        color: 'var(--studio-text-primary)',
                         fontSize: 12,
                         fontFamily: 'var(--font-mono)',
                       }}
@@ -785,13 +794,13 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   width: '100%',
                   padding: '10px 14px',
                   backgroundColor: 'var(--studio-surface-3)',
-                  color: '#F8FAFC',
+                  color: 'var(--studio-text-primary)',
                   border: '1px solid rgba(56, 189, 248, 0.42)',
                   borderRadius: 8,
                   fontSize: 12.5,
                   fontWeight: 600,
                   cursor: 'pointer',
-                  boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 20px -8px rgba(0, 0, 0, 0.6)',
+                  boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 20px -8px rgba(0, 0, 0, 0.25)',
                 }}
               >
                 <Sparkles size={14} color="#38BDF8" />
@@ -825,7 +834,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   padding: 10,
                   fontSize: 11,
                   fontFamily: 'var(--font-mono)',
-                  color: '#CBD5E1',
+                  color: 'var(--studio-text-secondary)',
                   overflowX: 'auto',
                   margin: 0,
                   lineHeight: 1.45,
@@ -846,7 +855,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             <div
               style={{
                 backgroundColor: 'var(--studio-surface-1)',
-                color: '#F8FAFC',
+                color: 'var(--studio-text-primary)',
                 border: '1px solid var(--studio-border-strong)',
                 borderRadius: 14,
                 padding: 22,
@@ -855,7 +864,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 15,
-                boxShadow: '0 28px 60px -12px rgba(0, 0, 0, 0.85)',
+                boxShadow: '0 28px 60px -12px rgba(0, 0, 0, 0.55)',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -877,7 +886,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     background: 'transparent',
                     border: '1px solid transparent',
                     borderRadius: 5,
-                    color: '#94A3B8',
+                    color: 'var(--studio-text-secondary)',
                     cursor: 'pointer',
                     padding: 4,
                   }}
@@ -886,10 +895,10 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 </button>
               </div>
 
-              <p style={{ margin: 0, fontSize: 12.5, color: '#94A3B8', lineHeight: 1.55 }}>
+              <p style={{ margin: 0, fontSize: 12.5, color: 'var(--studio-text-secondary)', lineHeight: 1.55 }}>
                 Describe the structural or stateful change you want for{' '}
-                <code style={{ color: '#38BDF8', fontFamily: 'var(--font-mono)' }}>&lt;{inspected.tagName}&gt;</code> in{' '}
-                <code className="tabular-nums" style={{ color: '#A5B4FC', fontFamily: 'var(--font-mono)' }}>
+                <code style={{ color: '#0284C7', fontFamily: 'var(--font-mono)' }}>&lt;{inspected.tagName}&gt;</code> in{' '}
+                <code className="tabular-nums" style={{ color: '#6366F1', fontFamily: 'var(--font-mono)' }}>
                   {inspected.file}:{inspected.line}
                 </code>
                 .
@@ -906,7 +915,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   border: '1px solid var(--studio-border-subtle)',
                   borderRadius: 8,
                   padding: 11,
-                  color: '#F8FAFC',
+                  color: 'var(--studio-text-primary)',
                   fontSize: 12.5,
                   fontFamily: 'var(--font-sans)',
                 }}
@@ -923,7 +932,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   overflowY: 'auto',
                   fontSize: 11,
                   fontFamily: 'var(--font-mono)',
-                  color: '#94A3B8',
+                  color: 'var(--studio-text-secondary)',
                   whiteSpace: 'pre-wrap',
                 }}
               >
@@ -940,7 +949,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     borderRadius: 7,
                     border: '1px solid var(--studio-border-subtle)',
                     backgroundColor: 'var(--studio-surface-2)',
-                    color: '#CBD5E1',
+                    color: 'var(--studio-text-secondary)',
                     fontSize: 12,
                     fontWeight: 600,
                     cursor: 'pointer',
@@ -960,7 +969,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     borderRadius: 7,
                     border: '1px solid rgba(56, 189, 248, 0.45)',
                     backgroundColor: 'var(--studio-surface-3)',
-                    color: '#F8FAFC',
+                    color: 'var(--studio-text-primary)',
                     fontSize: 12,
                     fontWeight: 600,
                     cursor: 'pointer',

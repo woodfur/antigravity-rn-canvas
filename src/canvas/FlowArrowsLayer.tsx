@@ -146,7 +146,7 @@ export const FlowArrowsLayer: React.FC<FlowArrowsLayerProps> = ({
               cx={startX}
               cy={startY}
               r={4}
-              fill="#0B0D12"
+              fill="var(--studio-surface-1)"
               stroke={strokeColor}
               strokeWidth={2}
             />
@@ -172,15 +172,15 @@ export const FlowArrowsLayer: React.FC<FlowArrowsLayerProps> = ({
                   gap: 4,
                   padding: '3px 9px',
                   borderRadius: 999,
-                  backgroundColor: isHighlighted ? '#064E3B' : '#131724',
-                  border: `1px solid ${isHighlighted ? '#10B981' : '#312E81'}`,
-                  color: isHighlighted ? '#A7F3D0' : '#C7D2FE',
+                  backgroundColor: 'var(--studio-surface-1)',
+                  border: `1px solid ${isHighlighted ? 'var(--studio-accent-emerald)' : 'var(--studio-badge-indigo-border)'}`,
+                  color: isHighlighted ? 'var(--studio-badge-emerald-text)' : 'var(--studio-badge-indigo-text)',
                   fontSize: 10,
                   fontWeight: 600,
                   fontFamily: 'JetBrains Mono, monospace',
                   whiteSpace: 'nowrap',
                   cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.45)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
                   margin: '0 auto',
                 }}
               >

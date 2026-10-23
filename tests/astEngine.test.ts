@@ -21,6 +21,8 @@ import {
   verifyApiRequestSecurity,
 } from '../src/server/apiMiddleware';
 import { initProject, findAvailablePort } from '../bin/cli.mjs';
+import { viteVirtualScreensPlugin } from '../plugins/viteVirtualScreensPlugin';
+import { viteReactNativeFallbackPlugin } from '../plugins/viteReactNativeFallbackPlugin';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_ROOT = path.resolve(__dirname, '..');
@@ -325,6 +327,46 @@ describe('Antigravity React Native Visual Canvas — AST Engine', () => {
       expect(initRes.screensDir).toBe('apps/mobile/src/screens');
     } finally {
       fs.rmSync(tmpMonorepo, { recursive: true, force: true });
+    }
+  });
+
+  it('isolates screen modules with dynamic import() and synthesizes named export stubs for Expo/RN native modules', () => {
+    expect(normalizeRouteTarget('/(tabs)/loans/[id]')).toBe('LoansById');
+
+    const virtualPlugin = viteVirtualScreensPlugin(WORKSPACE_ROOT) as {
+      resolveId: (id: string) => string | null;
+      load: (id: string) => string | null;
+    };
+    const resolvedId = virtualPlugin.resolveId('virtual:zelune-screens');
+    expect(resolvedId).toBeTruthy();
+    const virtualCode = virtualPlugin.load(resolvedId!);
+    expect(virtualCode).toContain('createIsolatedScreenComponent');
+    expect(virtualCode).toContain('(attempt) => attempt > 0 ? import(');
+
+    const tmpScreenDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zelune-fallback-test-'));
+    try {
+      const sampleScreen = path.join(tmpScreenDir, 'CameraScreen.tsx');
+      fs.writeFileSync(
+        sampleScreen,
+        `import { CameraView, useCameraPermissions } from 'expo-camera';\nimport { Ionicons } from '@expo/vector-icons';\n`,
+        'utf8'
+      );
+
+      const fallbackPlugin = viteReactNativeFallbackPlugin(
+        tmpScreenDir,
+        path.join(WORKSPACE_ROOT, 'src/runtime/MockNavigationContext.tsx')
+      ) as {
+        resolveId: (source: string, importer?: string) => string | null;
+        load: (id: string) => string | null;
+      };
+
+      const cameraStubId = fallbackPlugin.resolveId('expo-camera', sampleScreen);
+      expect(cameraStubId).toContain('virtual:zelune-native-stub:');
+      const cameraStubCode = fallbackPlugin.load(cameraStubId!);
+      expect(cameraStubCode).toContain('export const CameraView =');
+      expect(cameraStubCode).toContain('export const useCameraPermissions =');
+    } finally {
+      fs.rmSync(tmpScreenDir, { recursive: true, force: true });
     }
   });
 });

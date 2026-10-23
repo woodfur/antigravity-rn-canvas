@@ -350,10 +350,12 @@ export function normalizeRouteTarget(rawTarget: string): string {
   const trimmed = rawTarget
     .replace(/^\/+/, '')
     .replace(/\([^)]+\)\/?/g, '')
+    .replace(/\[\.\.\.([^\]]+)\]/g, 'CatchAll_$1')
+    .replace(/\[([^\]]+)\]/g, 'By_$1')
     .replace(/Screen$/, '')
     .replace(/\/index$/, '');
   if (!trimmed || trimmed === 'index') return 'Home';
-  if (trimmed.includes('-') || trimmed.includes('/') || trimmed === trimmed.toLowerCase()) {
+  if (trimmed.includes('-') || trimmed.includes('/') || trimmed.includes('_') || trimmed === trimmed.toLowerCase()) {
     return trimmed
       .split(/[-_/]/)
       .filter(Boolean)
@@ -649,6 +651,13 @@ export function discoverScreenFilesSync(workspaceRoot: string): DiscoveredScreen
     let routeName = normalizeRouteTarget(noExt);
     if (seenIds.has(routeName)) {
       routeName = normalizeRouteTarget(noExt.replace(/[()]/g, ''));
+    }
+    if (seenIds.has(routeName)) {
+      let suffix = 2;
+      while (seenIds.has(`${routeName}${suffix}`)) {
+        suffix++;
+      }
+      routeName = `${routeName}${suffix}`;
     }
     seenIds.add(routeName);
 

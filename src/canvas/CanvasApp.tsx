@@ -16,6 +16,8 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Sliders,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { SCREEN_COMPONENTS, SCREEN_ORDER } from '../screens';
 import { ScreenArtboard } from './ScreenArtboard';
@@ -66,6 +68,46 @@ export const CanvasApp: React.FC = () => {
   // Collapsible Left (Screen Rail) & Right (AST Inspector) Panels
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState<boolean>(true);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState<boolean>(true);
+
+  // Studio color-scheme state ('dark' default, persisted in localStorage & <meta name="color-scheme">)
+  const [colorScheme, setColorScheme] = useState<'dark' | 'light'>(() => {
+    try {
+      return localStorage.getItem('color-scheme') === 'light' ? 'light' : 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+
+  const applyColorScheme = useCallback((next: 'dark' | 'light') => {
+    setColorScheme(next);
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="color-scheme"]');
+    if (meta) {
+      meta.content = next;
+    }
+    try {
+      localStorage.setItem('color-scheme', next);
+    } catch {
+      // Ignore storage write errors in restricted environments
+    }
+  }, []);
+
+  const toggleColorScheme = useCallback(() => {
+    applyColorScheme(colorScheme === 'dark' ? 'light' : 'dark');
+  }, [colorScheme, applyColorScheme]);
+
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key !== 'color-scheme') return;
+      const next = e.newValue === 'light' ? 'light' : 'dark';
+      setColorScheme(next);
+      const meta = document.querySelector<HTMLMetaElement>('meta[name="color-scheme"]');
+      if (meta) {
+        meta.content = next;
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 20, y: 10 });
   const [zoom, setZoom] = useState<number>(0.68);
@@ -691,7 +733,14 @@ export const CanvasApp: React.FC = () => {
             ZL
           </div>
           <div>
-            <div style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: '-0.02em', color: '#F8FAFC' }}>
+            <div
+              style={{
+                fontSize: 13.5,
+                fontWeight: 700,
+                letterSpacing: '-0.02em',
+                color: 'var(--studio-text-primary)',
+              }}
+            >
               Zelune
             </div>
             <div
@@ -731,14 +780,16 @@ export const CanvasApp: React.FC = () => {
                 borderRadius: 5,
                 border: mode === 'inspect' ? '1px solid rgba(56, 189, 248, 0.35)' : '1px solid transparent',
                 backgroundColor: mode === 'inspect' ? 'var(--studio-surface-3)' : 'transparent',
-                color: mode === 'inspect' ? '#38BDF8' : 'var(--studio-text-secondary)',
+                color: mode === 'inspect' ? '#0284C7' : 'var(--studio-text-secondary)',
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: 'pointer',
               }}
             >
-              <MousePointer size={14} style={{ flexShrink: 0 }} />
-              <span className="zelune-reveal-label">Inspect &amp; Edit</span>
+              <MousePointer size={14} style={{ flexShrink: 0, color: mode === 'inspect' ? '#38BDF8' : 'currentColor' }} />
+              <span className="zelune-reveal-label" style={{ color: mode === 'inspect' ? 'var(--studio-text-primary)' : 'inherit' }}>
+                Inspect &amp; Edit
+              </span>
             </button>
 
             <button
@@ -751,8 +802,8 @@ export const CanvasApp: React.FC = () => {
                 padding: '6px 9px',
                 borderRadius: 5,
                 border: mode === 'interact' ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid transparent',
-                backgroundColor: mode === 'interact' ? 'rgba(6, 78, 59, 0.45)' : 'transparent',
-                color: mode === 'interact' ? '#34D399' : 'var(--studio-text-secondary)',
+                backgroundColor: mode === 'interact' ? 'rgba(16, 185, 129, 0.14)' : 'transparent',
+                color: mode === 'interact' ? (colorScheme === 'dark' ? '#34D399' : '#059669') : 'var(--studio-text-secondary)',
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -773,8 +824,8 @@ export const CanvasApp: React.FC = () => {
               padding: '7px 9px',
               borderRadius: 7,
               border: `1px solid ${showFlows ? 'rgba(99, 102, 241, 0.45)' : 'var(--studio-border-subtle)'}`,
-              backgroundColor: showFlows ? 'rgba(30, 27, 75, 0.55)' : 'var(--studio-surface-2)',
-              color: showFlows ? '#C7D2FE' : 'var(--studio-text-secondary)',
+              backgroundColor: showFlows ? 'rgba(99, 102, 241, 0.14)' : 'var(--studio-surface-2)',
+              color: showFlows ? (colorScheme === 'dark' ? '#C7D2FE' : '#4F46E5') : 'var(--studio-text-secondary)',
               fontSize: 12,
               fontWeight: 600,
               cursor: 'pointer',
@@ -785,7 +836,7 @@ export const CanvasApp: React.FC = () => {
           </button>
         </div>
 
-        {/* Right: Undo/Redo, Viewport Controls & Right Inspector Toggle */}
+        {/* Right: Undo/Redo, Viewport Controls, Theme Toggle & Right Inspector Toggle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button
             type="button"
@@ -801,7 +852,10 @@ export const CanvasApp: React.FC = () => {
               borderRadius: 6,
               border: '1px solid var(--studio-border-subtle)',
               backgroundColor: 'var(--studio-surface-2)',
-              color: historyState.undoAvailable > 0 ? '#E2E8F0' : '#475569',
+              color:
+                historyState.undoAvailable > 0
+                  ? 'var(--studio-text-primary)'
+                  : 'var(--studio-text-muted)',
               fontSize: 11.5,
               fontFamily: 'var(--font-mono)',
               cursor: historyState.undoAvailable > 0 ? 'pointer' : 'not-allowed',
@@ -825,7 +879,10 @@ export const CanvasApp: React.FC = () => {
               borderRadius: 6,
               border: '1px solid var(--studio-border-subtle)',
               backgroundColor: 'var(--studio-surface-2)',
-              color: historyState.redoAvailable > 0 ? '#E2E8F0' : '#475569',
+              color:
+                historyState.redoAvailable > 0
+                  ? 'var(--studio-text-primary)'
+                  : 'var(--studio-text-muted)',
               fontSize: 11.5,
               cursor: historyState.redoAvailable > 0 ? 'pointer' : 'not-allowed',
             }}
@@ -848,7 +905,7 @@ export const CanvasApp: React.FC = () => {
               borderRadius: 6,
               border: '1px solid var(--studio-border-subtle)',
               backgroundColor: 'var(--studio-surface-2)',
-              color: '#CBD5E1',
+              color: 'var(--studio-text-secondary)',
               cursor: 'pointer',
             }}
           >
@@ -862,7 +919,7 @@ export const CanvasApp: React.FC = () => {
               textAlign: 'center',
               fontSize: 11.5,
               fontFamily: 'var(--font-mono)',
-              color: '#CBD5E1',
+              color: 'var(--studio-text-secondary)',
             }}
           >
             {Math.round(zoom * 100)}%
@@ -881,7 +938,7 @@ export const CanvasApp: React.FC = () => {
               borderRadius: 6,
               border: '1px solid var(--studio-border-subtle)',
               backgroundColor: 'var(--studio-surface-2)',
-              color: '#CBD5E1',
+              color: 'var(--studio-text-secondary)',
               cursor: 'pointer',
             }}
           >
@@ -899,7 +956,7 @@ export const CanvasApp: React.FC = () => {
               borderRadius: 6,
               border: '1px solid var(--studio-border-subtle)',
               backgroundColor: 'var(--studio-surface-2)',
-              color: '#CBD5E1',
+              color: 'var(--studio-text-secondary)',
               fontSize: 11.5,
               fontWeight: 500,
               cursor: 'pointer',
@@ -920,7 +977,7 @@ export const CanvasApp: React.FC = () => {
               borderRadius: 6,
               border: '1px solid var(--studio-border-subtle)',
               backgroundColor: 'var(--studio-surface-2)',
-              color: '#CBD5E1',
+              color: 'var(--studio-text-secondary)',
               fontSize: 11.5,
               fontWeight: 500,
               cursor: 'pointer',
@@ -928,6 +985,37 @@ export const CanvasApp: React.FC = () => {
           >
             <LayoutGrid size={13} style={{ flexShrink: 0 }} />
             <span className="zelune-reveal-label">Grid</span>
+          </button>
+
+          <button
+            type="button"
+            className="zelune-interactive zelune-icon-reveal-btn"
+            onClick={toggleColorScheme}
+            title={
+              colorScheme === 'dark' ? 'Switch Canvas to Light Mode' : 'Switch Canvas to Dark Mode'
+            }
+            aria-label={
+              colorScheme === 'dark' ? 'Switch Canvas to Light Mode' : 'Switch Canvas to Dark Mode'
+            }
+            style={{
+              padding: '6px 8px',
+              borderRadius: 6,
+              border: '1px solid var(--studio-border-subtle)',
+              backgroundColor: 'var(--studio-surface-2)',
+              color: 'var(--studio-text-secondary)',
+              fontSize: 11.5,
+              fontWeight: 500,
+              cursor: 'pointer',
+            }}
+          >
+            {colorScheme === 'dark' ? (
+              <Sun size={13} style={{ flexShrink: 0, color: '#F59E0B' }} />
+            ) : (
+              <Moon size={13} style={{ flexShrink: 0, color: '#6366F1' }} />
+            )}
+            <span className="zelune-reveal-label">
+              {colorScheme === 'dark' ? 'Light' : 'Dark'}
+            </span>
           </button>
 
           <div style={{ width: 1, height: 20, backgroundColor: 'var(--studio-border-subtle)', margin: '0 3px' }} />
@@ -1068,7 +1156,7 @@ export const CanvasApp: React.FC = () => {
                         isSelected ? 'rgba(56, 189, 248, 0.35)' : 'transparent'
                       }`,
                       backgroundColor: isSelected ? 'var(--studio-surface-2)' : 'transparent',
-                      color: isSelected ? '#F8FAFC' : 'var(--studio-text-secondary)',
+                      color: isSelected ? 'var(--studio-text-primary)' : 'var(--studio-text-secondary)',
                       fontSize: 12.5,
                       fontWeight: isSelected ? 600 : 500,
                       cursor: 'pointer',
@@ -1108,7 +1196,7 @@ export const CanvasApp: React.FC = () => {
                   fontSize: 10,
                   fontWeight: 600,
                   letterSpacing: '0.05em',
-                  color: '#E2E8F0',
+                  color: 'var(--studio-text-primary)',
                   marginBottom: 4,
                 }}
               >
@@ -1157,12 +1245,12 @@ export const CanvasApp: React.FC = () => {
                 borderRadius: 8,
                 backgroundColor: 'var(--studio-surface-1)',
                 border: '1px solid var(--studio-border-subtle)',
-                color: '#F1F5F9',
+                color: 'var(--studio-text-primary)',
                 fontSize: 11.5,
                 fontFamily: 'var(--font-mono)',
                 fontWeight: 600,
                 cursor: 'pointer',
-                boxShadow: '0 10px 24px -6px rgba(0, 0, 0, 0.65)',
+                boxShadow: '0 10px 24px -6px rgba(0, 0, 0, 0.28)',
               }}
             >
               <PanelLeftOpen size={13} color="#38BDF8" />
@@ -1193,19 +1281,19 @@ export const CanvasApp: React.FC = () => {
                 borderRadius: 8,
                 backgroundColor: 'var(--studio-surface-1)',
                 border: '1px solid var(--studio-border-subtle)',
-                color: '#F1F5F9',
+                color: 'var(--studio-text-primary)',
                 fontSize: 11.5,
                 fontFamily: 'var(--font-mono)',
                 fontWeight: 600,
                 cursor: 'pointer',
-                boxShadow: '0 10px 24px -6px rgba(0, 0, 0, 0.65)',
+                boxShadow: '0 10px 24px -6px rgba(0, 0, 0, 0.28)',
               }}
             >
               <Sliders size={13} color="#38BDF8" />
               <span>
                 {inspectedData ? `<${inspectedData.tagName}> L${inspectedData.line}` : 'AST Inspector'}
               </span>
-              <PanelRightOpen size={13} color="#94A3B8" />
+              <PanelRightOpen size={13} color="var(--studio-text-secondary)" />
             </button>
           )}
 

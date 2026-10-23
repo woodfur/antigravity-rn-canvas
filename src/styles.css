@@ -6,25 +6,60 @@
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Tinted Obsidian Surface Palette (No pure black/untinted gray slop) */
-  --studio-canvas-bg: #08090c;
-  --studio-surface-1: #0d0f14;
-  --studio-surface-2: #13161e;
-  --studio-surface-3: #191d28;
-  --studio-border-hairline: rgba(255, 255, 255, 0.07);
-  --studio-border-subtle: #1e2330;
-  --studio-border-strong: #2a3142;
+  /* Explicit Light & Dark Palette Definitions (modern-web-guidance: dark-mode-toggle) */
+  --studio-canvas-bg-light: #f1f5f9;
+  --studio-canvas-bg-dark: #08090c;
+  --studio-surface-1-light: #ffffff;
+  --studio-surface-1-dark: #0d0f14;
+  --studio-surface-2-light: #f8fafc;
+  --studio-surface-2-dark: #13161e;
+  --studio-surface-3-light: #e2e8f0;
+  --studio-surface-3-dark: #191d28;
+  --studio-border-hairline-light: rgba(15, 23, 42, 0.09);
+  --studio-border-hairline-dark: rgba(255, 255, 255, 0.07);
+  --studio-border-subtle-light: #cbd5e1;
+  --studio-border-subtle-dark: #1e2330;
+  --studio-border-strong-light: #94a3b8;
+  --studio-border-strong-dark: #2a3142;
+  --studio-text-primary-light: #0f172a;
+  --studio-text-primary-dark: #f1f5f9;
+  --studio-text-secondary-light: #475569;
+  --studio-text-secondary-dark: #94a3b8;
+  --studio-text-muted-light: #64748b;
+  --studio-text-muted-dark: #64748b;
+  --studio-dot-grid-light: rgba(15, 23, 42, 0.14);
+  --studio-dot-grid-dark: rgba(148, 163, 184, 0.14);
+  --scrollbar-thumb-light: #cbd5e1;
+  --scrollbar-thumb-dark: #262d3d;
+  --scrollbar-track-light: #f1f5f9;
+  --scrollbar-track-dark: #0d0f14;
 
-  /* Text Hierarchy */
-  --studio-text-primary: #f1f5f9;
-  --studio-text-secondary: #94a3b8;
-  --studio-text-muted: #64748b;
+  /* Base fallback values (for browsers without light-dark()) */
+  --studio-canvas-bg: var(--studio-canvas-bg-light);
+  --studio-surface-1: var(--studio-surface-1-light);
+  --studio-surface-2: var(--studio-surface-2-light);
+  --studio-surface-3: var(--studio-surface-3-light);
+  --studio-border-hairline: var(--studio-border-hairline-light);
+  --studio-border-subtle: var(--studio-border-subtle-light);
+  --studio-border-strong: var(--studio-border-strong-light);
+  --studio-text-primary: var(--studio-text-primary-light);
+  --studio-text-secondary: var(--studio-text-secondary-light);
+  --studio-text-muted: var(--studio-text-muted-light);
+  --studio-dot-grid: var(--studio-dot-grid-light);
+  --scrollbar-thumb: var(--scrollbar-thumb-light);
+  --scrollbar-track: var(--scrollbar-track-light);
 
   /* Intentional Signal Accents */
-  --studio-accent-cyan: #38bdf8;
-  --studio-accent-indigo: #6366f1;
-  --studio-accent-emerald: #10b981;
-  --studio-accent-amber: #f59e0b;
+  --studio-accent-cyan: #0284c7;
+  --studio-accent-indigo: #4f46e5;
+  --studio-accent-emerald: #059669;
+  --studio-accent-amber: #d97706;
+  --studio-badge-indigo-bg: rgba(79, 70, 229, 0.1);
+  --studio-badge-indigo-border: rgba(79, 70, 229, 0.32);
+  --studio-badge-indigo-text: #3730a3;
+  --studio-badge-emerald-bg: rgba(5, 150, 105, 0.1);
+  --studio-badge-emerald-border: rgba(5, 150, 105, 0.32);
+  --studio-badge-emerald-text: #065f46;
 
   /* Emil Kowalski Motion & Easing Tokens (emilkowalski/skills) */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -44,6 +79,132 @@
   --control-py-spacious: 8px;
   --rail-item-py-compact: 7px;
   --rail-item-py-spacious: 10px;
+
+  @media (prefers-color-scheme: dark) {
+    --studio-canvas-bg: var(--studio-canvas-bg-dark);
+    --studio-surface-1: var(--studio-surface-1-dark);
+    --studio-surface-2: var(--studio-surface-2-dark);
+    --studio-surface-3: var(--studio-surface-3-dark);
+    --studio-border-hairline: var(--studio-border-hairline-dark);
+    --studio-border-subtle: var(--studio-border-subtle-dark);
+    --studio-border-strong: var(--studio-border-strong-dark);
+    --studio-text-primary: var(--studio-text-primary-dark);
+    --studio-text-secondary: var(--studio-text-secondary-dark);
+    --studio-text-muted: var(--studio-text-muted-dark);
+    --studio-dot-grid: var(--studio-dot-grid-dark);
+    --scrollbar-thumb: var(--scrollbar-thumb-dark);
+    --scrollbar-track: var(--scrollbar-track-dark);
+    --studio-accent-cyan: #38bdf8;
+    --studio-accent-indigo: #6366f1;
+    --studio-accent-emerald: #34d399;
+    --studio-accent-amber: #f59e0b;
+    --studio-badge-indigo-bg: rgba(99, 102, 241, 0.18);
+    --studio-badge-indigo-border: rgba(99, 102, 241, 0.4);
+    --studio-badge-indigo-text: #c7d2fe;
+    --studio-badge-emerald-bg: rgba(16, 185, 129, 0.14);
+    --studio-badge-emerald-border: rgba(16, 185, 129, 0.35);
+    --studio-badge-emerald-text: #a7f3d0;
+  }
+
+  &:has(> head > meta[name="color-scheme"][content="dark"]) {
+    color-scheme: dark;
+    --studio-canvas-bg: var(--studio-canvas-bg-dark);
+    --studio-surface-1: var(--studio-surface-1-dark);
+    --studio-surface-2: var(--studio-surface-2-dark);
+    --studio-surface-3: var(--studio-surface-3-dark);
+    --studio-border-hairline: var(--studio-border-hairline-dark);
+    --studio-border-subtle: var(--studio-border-subtle-dark);
+    --studio-border-strong: var(--studio-border-strong-dark);
+    --studio-text-primary: var(--studio-text-primary-dark);
+    --studio-text-secondary: var(--studio-text-secondary-dark);
+    --studio-text-muted: var(--studio-text-muted-dark);
+    --studio-dot-grid: var(--studio-dot-grid-dark);
+    --scrollbar-thumb: var(--scrollbar-thumb-dark);
+    --scrollbar-track: var(--scrollbar-track-dark);
+    --studio-accent-cyan: #38bdf8;
+    --studio-accent-indigo: #6366f1;
+    --studio-accent-emerald: #34d399;
+    --studio-accent-amber: #f59e0b;
+    --studio-badge-indigo-bg: rgba(99, 102, 241, 0.18);
+    --studio-badge-indigo-border: rgba(99, 102, 241, 0.4);
+    --studio-badge-indigo-text: #c7d2fe;
+    --studio-badge-emerald-bg: rgba(16, 185, 129, 0.14);
+    --studio-badge-emerald-border: rgba(16, 185, 129, 0.35);
+    --studio-badge-emerald-text: #a7f3d0;
+  }
+
+  &:has(> head > meta[name="color-scheme"][content="light"]) {
+    color-scheme: light;
+    --studio-canvas-bg: var(--studio-canvas-bg-light);
+    --studio-surface-1: var(--studio-surface-1-light);
+    --studio-surface-2: var(--studio-surface-2-light);
+    --studio-surface-3: var(--studio-surface-3-light);
+    --studio-border-hairline: var(--studio-border-hairline-light);
+    --studio-border-subtle: var(--studio-border-subtle-light);
+    --studio-border-strong: var(--studio-border-strong-light);
+    --studio-text-primary: var(--studio-text-primary-light);
+    --studio-text-secondary: var(--studio-text-secondary-light);
+    --studio-text-muted: var(--studio-text-muted-light);
+    --studio-dot-grid: var(--studio-dot-grid-light);
+    --scrollbar-thumb: var(--scrollbar-thumb-light);
+    --scrollbar-track: var(--scrollbar-track-light);
+    --studio-accent-cyan: #0284c7;
+    --studio-accent-indigo: #4f46e5;
+    --studio-accent-emerald: #059669;
+    --studio-accent-amber: #d97706;
+    --studio-badge-indigo-bg: rgba(79, 70, 229, 0.1);
+    --studio-badge-indigo-border: rgba(79, 70, 229, 0.32);
+    --studio-badge-indigo-text: #3730a3;
+    --studio-badge-emerald-bg: rgba(5, 150, 105, 0.1);
+    --studio-badge-emerald-border: rgba(5, 150, 105, 0.32);
+    --studio-badge-emerald-text: #065f46;
+  }
+
+  @supports (color: light-dark(white, black)) {
+    --studio-canvas-bg: light-dark(var(--studio-canvas-bg-light), var(--studio-canvas-bg-dark));
+    --studio-surface-1: light-dark(var(--studio-surface-1-light), var(--studio-surface-1-dark));
+    --studio-surface-2: light-dark(var(--studio-surface-2-light), var(--studio-surface-2-dark));
+    --studio-surface-3: light-dark(var(--studio-surface-3-light), var(--studio-surface-3-dark));
+    --studio-border-hairline: light-dark(
+      var(--studio-border-hairline-light),
+      var(--studio-border-hairline-dark)
+    );
+    --studio-border-subtle: light-dark(
+      var(--studio-border-subtle-light),
+      var(--studio-border-subtle-dark)
+    );
+    --studio-border-strong: light-dark(
+      var(--studio-border-strong-light),
+      var(--studio-border-strong-dark)
+    );
+    --studio-text-primary: light-dark(
+      var(--studio-text-primary-light),
+      var(--studio-text-primary-dark)
+    );
+    --studio-text-secondary: light-dark(
+      var(--studio-text-secondary-light),
+      var(--studio-text-secondary-dark)
+    );
+    --studio-text-muted: light-dark(var(--studio-text-muted-light), var(--studio-text-muted-dark));
+    --studio-dot-grid: light-dark(var(--studio-dot-grid-light), var(--studio-dot-grid-dark));
+    --scrollbar-thumb: light-dark(var(--scrollbar-thumb-light), var(--scrollbar-thumb-dark));
+    --scrollbar-track: light-dark(var(--scrollbar-track-light), var(--scrollbar-track-dark));
+    --studio-accent-cyan: light-dark(#0284c7, #38bdf8);
+    --studio-accent-indigo: light-dark(#4f46e5, #6366f1);
+    --studio-accent-emerald: light-dark(#059669, #34d399);
+    --studio-accent-amber: light-dark(#d97706, #f59e0b);
+    --studio-badge-indigo-bg: light-dark(rgba(79, 70, 229, 0.1), rgba(99, 102, 241, 0.18));
+    --studio-badge-indigo-border: light-dark(rgba(79, 70, 229, 0.32), rgba(99, 102, 241, 0.4));
+    --studio-badge-indigo-text: light-dark(#3730a3, #c7d2fe);
+    --studio-badge-emerald-bg: light-dark(rgba(5, 150, 105, 0.1), rgba(16, 185, 129, 0.14));
+    --studio-badge-emerald-border: light-dark(rgba(5, 150, 105, 0.32), rgba(16, 185, 129, 0.35));
+    --studio-badge-emerald-text: light-dark(#065f46, #a7f3d0);
+  }
+
+  /* Base declaration MUST stay light dark (modern-web-guidance: dark-mode-toggle) */
+  color-scheme: light dark;
+  accent-color: var(--studio-accent-cyan);
+  color: var(--studio-text-primary);
 }
 
 *,
@@ -79,10 +240,11 @@ body,
 /* Precision architectural dot matrix on the infinite canvas */
 .infinite-canvas-surface {
   background-color: var(--studio-canvas-bg);
-  background-image: radial-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px);
+  background-image: radial-gradient(var(--studio-dot-grid) 1px, transparent 1px);
   background-size: 24px 24px;
   touch-action: none;
   overscroll-behavior: none;
+  transition: background-color var(--duration-micro) var(--ease-out);
 }
 
 /* Smooth Collapsible Studio Side Panels (emilkowalski/skills --ease-out-expo) */
@@ -92,6 +254,7 @@ body,
   transition:
     width var(--duration-panel) var(--ease-out-expo),
     opacity var(--duration-micro) var(--ease-out),
+    background-color var(--duration-micro) var(--ease-out),
     border-color var(--duration-micro) var(--ease-out);
 }
 
@@ -225,8 +388,6 @@ body,
 
 /* Custom Scrollbar Styling (modern-web-guidance: customize-scrollbar-color-and-thickness) */
 .zelune-scroller {
-  --scrollbar-thumb: #262d3d;
-  --scrollbar-track: #0d0f14;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
@@ -284,7 +445,7 @@ dialog:modal {
 dialog::backdrop {
   overflow: hidden;
   overscroll-behavior: contain;
-  background-color: rgba(5, 7, 11, 0.76);
+  background-color: rgba(5, 7, 11, 0.65);
   backdrop-filter: blur(6px);
 }
 
