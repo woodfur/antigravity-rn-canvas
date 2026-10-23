@@ -13,8 +13,13 @@ const PREFERRED_ORDER = ['Login', 'Home', 'ProductDetail', 'Checkout', 'Profile'
  * can never blank out the entire Zelune studio canvas.
  */
 export function viteVirtualScreensPlugin(workspaceRoot: string): Plugin {
+  let isBuild = false;
+
   return {
     name: 'vite-virtual-zelune-screens',
+    configResolved(config) {
+      isBuild = config.command === 'build';
+    },
     resolveId(id) {
       if (id === VIRTUAL_MODULE_ID) {
         return RESOLVED_VIRTUAL_MODULE_ID;
@@ -167,12 +172,20 @@ export function viteVirtualScreensPlugin(workspaceRoot: string): Plugin {
 
       sorted.forEach((scr) => {
         const normalizedFullPath = scr.fullPath.replace(/\\/g, '/');
+        const fsUrl =
+          '/@fs' + (normalizedFullPath.startsWith('/') ? '' : '/') + normalizedFullPath;
+        const loaderExpr = isBuild
+          ? `(attempt) => attempt > 0 ? import(/* @vite-ignore */ ${JSON.stringify(
+              normalizedFullPath
+            )} + '?t=' + Date.now()) : import(${JSON.stringify(normalizedFullPath)})`
+          : `(attempt) => import(/* @vite-ignore */ ${JSON.stringify(
+              fsUrl
+            )} + (attempt > 0 ? '?t=' + Date.now() : ''))`;
+
         mapEntries.push(
           `  ${JSON.stringify(scr.id)}: createIsolatedScreenComponent(${JSON.stringify(
             scr.id
-          )}, ${JSON.stringify(scr.relPath)}, (attempt) => attempt > 0 ? import(/* @vite-ignore */ ${JSON.stringify(
-            normalizedFullPath
-          )} + '?t=' + Date.now()) : import(${JSON.stringify(normalizedFullPath)}))`
+          )}, ${JSON.stringify(scr.relPath)}, ${loaderExpr})`
         );
         orderIds.push(scr.id);
       });

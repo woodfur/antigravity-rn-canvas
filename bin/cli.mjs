@@ -210,10 +210,20 @@ function addCanvasScriptToPackageJson(dirPath) {
   try {
     const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
     pkg.scripts = pkg.scripts || {};
-    if (pkg.name !== 'zelune' && !pkg.scripts.canvas) {
-      pkg.scripts.canvas = 'zelune';
-      fs.writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
-      return true;
+    if (pkg.name !== 'zelune') {
+      let modified = false;
+      if (!pkg.scripts.zelune || String(pkg.scripts.zelune).includes('npx')) {
+        pkg.scripts.zelune = 'zelune';
+        modified = true;
+      }
+      if (!pkg.scripts.canvas || String(pkg.scripts.canvas).includes('npx')) {
+        pkg.scripts.canvas = 'zelune';
+        modified = true;
+      }
+      if (modified) {
+        fs.writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+        return true;
+      }
     }
   } catch {
     // Ignore malformed package.json
@@ -342,20 +352,21 @@ Usage:
     }
     console.log(`   • Screens directory: ${result.screensDir}`);
     if (result.updatedPackageJson) {
-      console.log(`   • Added "canvas": "zelune" script to package.json`);
+      console.log(`   • Added "zelune": "zelune" script to package.json`);
     }
     console.log(`   • Configured MCP server in mcp_config.json`);
     console.log(`   • Installed AI skill in .agents/skills/zelune/SKILL.md`);
     if (result.createdDesignMd || result.createdProductMd) {
       console.log(`   • Created starter DESIGN.md & PRODUCT.md governance docs`);
     }
-    console.log(`\n👉 Run "npx zelune" (or "npm run canvas") to open your screens in the visual canvas!\n`);
+    console.log(`\n👉 Run "zelune" (or "npm run zelune") to open your screens in the visual canvas!\n`);
     process.exit(0);
   }
 
   const resolvedMobileRoot = findMobileAppRoot(targetProject);
   const env = {
     ...process.env,
+    ANTIGRAVITY_WORKSPACE_ROOT: targetProject,
     ANTIGRAVITY_TARGET_PROJECT: resolvedMobileRoot,
   };
 

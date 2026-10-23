@@ -2,6 +2,21 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.5.4] - 2026-10-23
+
+### Added
+- **Full React Native API Web Shim (`src/runtime/reactNativeShim.ts`)**: Added a dedicated `'react-native'` ESM wrapper that re-exports all of `react-native-web`, provides a `default` export (`import RN from 'react-native'`), and shims React Native APIs missing from `react-native-web@0.19.13` (`useAnimatedValue`, `PermissionsAndroid`, `ToastAndroid`, `ActionSheetIOS`, `InputAccessoryView`, `DrawerLayoutAndroid`, `TurboModuleRegistry`, `requireNativeComponent`, `codegenNativeComponent`, `PlatformColor`, `DynamicColorIOS`, `DevSettings`, `Systrace`, `Networking`, `Settings`).
+- **Zustand, TanStack React Query & Supabase Client Shims (`src/runtime/MockNavigationContext.tsx`)**: Added built-in web shims for Zustand (`create` supporting both standard and curried TypeScript `create<T>()(...)` invocations, plus `useStore`), TanStack React Query (`useQuery`, `useInfiniteQuery`, `useMutation`, `useQueryClient`, `QueryClient`, `QueryClientProvider`), and Supabase (`createClient` with chainable `.from()`, `.auth`, `.storage`, `.channel()`, `.functions`).
+- **Top-Level Studio Recovery Boundary (`src/main.tsx`)**: Wrapped `<CanvasApp />` in `StudioRootErrorBoundary` so `#root` can never unmount into a blank white screen.
+
+### Fixed
+- **External Project Blank Screen Root-Cause Fixes (`vite.config.ts`, `bin/cli.mjs`, `plugins/viteVirtualScreensPlugin.ts`, `plugins/viteReactNativeFallbackPlugin.ts`, `src/runtime/MockNavigationContext.tsx`)**:
+  - **Vite Dependency Scanner Isolation (`vite.config.ts`, `plugins/viteVirtualScreensPlugin.ts`)**: Configured `optimizeDeps: { noDiscovery: true, include: ['react', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'react-dom', 'react-dom/client', 'react-native-web', 'lucide-react'] }` and emitted `/@fs/...` URLs with `/* @vite-ignore */` in dev mode so Vite's startup `esbuild` scanner never crawls external project `node_modules` (which contain Flow syntax, native modules, or duplicate React instances that previously crashed `optimizeDeps` before `src/main.tsx` could mount).
+  - **AST-Based Named Import & Re-Export Extraction (`plugins/viteReactNativeFallbackPlugin.ts`)**: Replaced the semicolon-dependent regex in `extractNamedImportsFromImporter` with `@babel/parser` AST traversal (`ImportDeclaration` and `ExportNamedDeclaration`) so semicolon-free (`semi: false`) and multiline files never miss named exports, and switched query parsing in `load(id)` to `URLSearchParams` so Vite's `?import&exports=...` injection never drops synthesized exports.
+  - **Callable Default Export Proxy (`src/runtime/MockNavigationContext.tsx`)**: Changed `defaultExportProxy` to wrap a callable React component function (`UniversalDefaultExportComponent`) so default-imported components (`import Ionicons from '@expo/vector-icons/Ionicons'`, `import Svg from 'react-native-svg'`, `import LottieView from 'lottie-react-native'`) render as valid React components without throwing `Element type is invalid: expected a string or class/function but got: object`.
+  - **Missing Lucide Icon & Local File Fallbacks (`plugins/viteReactNativeFallbackPlugin.ts`)**: Added automatic fallback icon synthesis for any icon name imported from `lucide-react` or `lucide-react-native` not present in `lucide-react@0.469.0`, trailing-comma-safe `tsconfig.json` alias resolution across `targetProjectRoot` and `workspaceRoot`, and automatic virtual-stub fallback for missing/ungenerated local imports.
+  - **Nested Monorepo Workspace & `npm run zelune` Script (`bin/cli.mjs`, `vite.config.ts`)**: Passed both `ANTIGRAVITY_WORKSPACE_ROOT` and `ANTIGRAVITY_TARGET_PROJECT` from `bin/cli.mjs`, enabled `server.fs.strict: false` with canonical `realpathSync` roots in `vite.config.ts`, and added `"zelune": "zelune"` alongside `"canvas": "zelune"` during `zelune init`.
+
 ## [1.5.3] - 2026-10-23
 
 ### Added

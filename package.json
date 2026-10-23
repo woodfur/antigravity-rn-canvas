@@ -1,6 +1,6 @@
 {
   "name": "zelune",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "private": false,
   "license": "MIT",
   "type": "module",
@@ -47,6 +47,7 @@
   ],
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173",
+    "zelune": "node ./bin/cli.mjs",
     "canvas": "node ./bin/cli.mjs",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173",

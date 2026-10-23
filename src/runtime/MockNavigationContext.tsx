@@ -174,6 +174,43 @@ export const createNativeStackNavigator = createNavigatorShim;
 export const createStackNavigator = createNavigatorShim;
 export const createBottomTabNavigator = createNavigatorShim;
 export const createDrawerNavigator = createNavigatorShim;
+export const createMaterialTopTabNavigator = createNavigatorShim;
+
+export const DefaultTheme = {
+  dark: false,
+  colors: {
+    primary: '#6366F1',
+    background: '#F8FAFC',
+    card: '#FFFFFF',
+    text: '#0F172A',
+    border: '#E2E8F0',
+    notification: '#EF4444',
+  },
+};
+
+export const DarkTheme = {
+  dark: true,
+  colors: {
+    primary: '#6366F1',
+    background: '#09090B',
+    card: '#18181B',
+    text: '#F8FAFC',
+    border: '#27272A',
+    notification: '#EF4444',
+  },
+};
+
+export const ThemeProvider: React.FC<{ value?: unknown; children?: React.ReactNode }> = ({
+  children,
+}) => <>{children}</>;
+
+export function useTheme() {
+  return DarkTheme;
+}
+
+export function useNavigationContainerRef() {
+  return { current: noopNavigation, isReady: () => true };
+}
 
 // ============================================================================
 // 2. Expo Router Shims (expo-router)
@@ -208,6 +245,10 @@ export function useSegments(): string[] {
   return [ctx.currentRoute.toLowerCase()];
 }
 
+export function useRootNavigationState() {
+  return { key: 'root', stale: false };
+}
+
 export const Link: React.FC<{
   href: string | { pathname: string; params?: Record<string, unknown> };
   asChild?: boolean;
@@ -236,7 +277,12 @@ NoopLayoutScreen.Screen = () => null;
 
 export const Stack = NoopLayoutScreen;
 export const Tabs = NoopLayoutScreen;
+export const Drawer = NoopLayoutScreen;
 export const Slot: React.FC<{ children?: React.ReactNode }> = ({ children }) => <>{children}</>;
+export const SplashScreen = {
+  preventAutoHideAsync: async () => true,
+  hideAsync: async () => true,
+};
 
 // ============================================================================
 // 3. React Native Safe Area Context Shims (react-native-safe-area-context)
@@ -258,6 +304,15 @@ export function useSafeAreaInsets(): { top: number; right: number; bottom: numbe
 
 export function useSafeAreaFrame(): { x: number; y: number; width: number; height: number } {
   return { x: 0, y: 0, width: 393, height: 852 };
+}
+
+export const SafeAreaInsetsContext = createContext({ top: 0, right: 0, bottom: 0, left: 0 });
+export const SafeAreaFrameContext = createContext({ x: 0, y: 0, width: 393, height: 852 });
+
+export function withSafeAreaInsets<P extends object>(Component: React.ComponentType<P>) {
+  return function WithSafeAreaInsetsWrapper(props: P) {
+    return <Component {...props} insets={{ top: 0, right: 0, bottom: 0, left: 0 }} />;
+  };
 }
 
 export const initialWindowMetrics = {
@@ -354,7 +409,7 @@ const ICON_GLYPH_MAP: Record<string, string> = {
   'trending-down': '↘',
 };
 
-function createVectorIconComponent(familyName: string) {
+export function createVectorIconComponent(familyName: string) {
   const IconComp: React.FC<VectorIconProps> & {
     glyphMap?: Record<string, number>;
     loadFont?: () => Promise<void>;
@@ -832,50 +887,282 @@ export function createURL(pathStr = ''): string {
   return `/${String(pathStr).replace(/^\/+/, '')}`;
 }
 
-const defaultExportProxy = new Proxy(
-  {
-    ...Animated,
-    ...AsyncStorage,
-    ...Constants,
-    Ionicons,
-    Feather,
-    MaterialIcons,
-    MaterialCommunityIcons,
-    FontAwesome,
-    FontAwesome5,
-    FontAwesome6,
-    AntDesign,
-    Entypo,
-    LinearGradient,
-    BlurView,
-    Image,
-    Svg,
-    ImpactFeedbackStyle,
-    NotificationFeedbackType,
-    impactAsync,
-    notificationAsync,
-    selectionAsync,
-    useFonts,
-    loadAsync,
-    preventAutoHideAsync,
-    hideAsync,
-    getItemAsync,
-    setItemAsync,
-    deleteItemAsync,
-    openURL,
-    createURL,
-  },
-  {
-    get(target, prop) {
-      if (prop in target) {
-        return target[prop as keyof typeof target];
-      }
-      if (typeof prop === 'string' && /^[A-Z]/.test(prop)) {
-        return createVectorIconComponent(prop);
-      }
-      return () => undefined;
-    },
+// ============================================================================
+// 10. State Management, Data Fetching & Backend Client Shims
+//     (Zustand, TanStack React Query, Supabase Client)
+// ============================================================================
+export function create(initializer?: unknown): unknown {
+  if (typeof initializer !== 'function') {
+    return (curriedInitializer: unknown) => create(curriedInitializer);
   }
-);
+  let state: Record<string, unknown> = {};
+  const setState = (partial: unknown) => {
+    try {
+      const next =
+        typeof partial === 'function' ? (partial as (s: unknown) => unknown)(state) : partial;
+      if (next && typeof next === 'object') {
+        state = { ...state, ...(next as Record<string, unknown>) };
+      }
+    } catch {
+      // Ignore setter errors in static canvas preview
+    }
+  };
+  const getState = () => state;
+  const api = {
+    setState,
+    getState,
+    getInitialState: () => state,
+    subscribe: () => () => undefined,
+    destroy: () => undefined,
+  };
+  try {
+    const initial = (
+      initializer as (
+        set: typeof setState,
+        get: typeof getState,
+        store: typeof api
+      ) => Record<string, unknown>
+    )(setState, getState, api);
+    if (initial && typeof initial === 'object') {
+      state = initial;
+    }
+  } catch {
+    state = {};
+  }
+  const useBoundStore = (selector?: (s: Record<string, unknown>) => unknown) => {
+    if (typeof selector === 'function') {
+      try {
+        return selector(state);
+      } catch {
+        return undefined;
+      }
+    }
+    return state;
+  };
+  return Object.assign(useBoundStore, api);
+}
+
+export function useStore(
+  store: { getState?: () => Record<string, unknown> } | ((s?: unknown) => unknown),
+  selector?: (s: Record<string, unknown>) => unknown
+) {
+  const rawState =
+    typeof store === 'function'
+      ? (store as () => Record<string, unknown>)()
+      : store?.getState?.() ?? {};
+  return typeof selector === 'function' ? selector(rawState) : rawState;
+}
+
+export class QueryClient {
+  mount() {}
+  unmount() {}
+  clear() {}
+  getQueryData() {
+    return undefined;
+  }
+  setQueryData() {}
+  invalidateQueries() {
+    return Promise.resolve();
+  }
+  prefetchQuery() {
+    return Promise.resolve();
+  }
+}
+
+export const QueryClientProvider: React.FC<{ client?: unknown; children?: React.ReactNode }> = ({
+  children,
+}) => <>{children}</>;
+
+export function useQueryClient() {
+  return new QueryClient();
+}
+
+export function useQuery() {
+  return {
+    data: undefined,
+    error: null,
+    isLoading: false,
+    isPending: false,
+    isFetching: false,
+    isError: false,
+    isSuccess: true,
+    status: 'success',
+    refetch: async () => ({ data: undefined, error: null }),
+  };
+}
+
+export function useInfiniteQuery() {
+  return {
+    data: { pages: [], pageParams: [] },
+    error: null,
+    isLoading: false,
+    isPending: false,
+    isFetching: false,
+    isFetchingNextPage: false,
+    hasNextPage: false,
+    fetchNextPage: async () => ({}),
+    refetch: async () => ({}),
+  };
+}
+
+export function useMutation() {
+  return {
+    mutate: () => undefined,
+    mutateAsync: async () => ({}),
+    reset: () => undefined,
+    data: undefined,
+    error: null,
+    isLoading: false,
+    isPending: false,
+    isError: false,
+    isSuccess: false,
+    status: 'idle',
+  };
+}
+
+function createSupabaseQueryBuilder(): Record<string, unknown> {
+  const resultPromise = Promise.resolve({ data: [], error: null, count: 0 });
+  const builder: Record<string, unknown> = new Proxy(
+    {},
+    {
+      get(_target, prop) {
+        if (prop === 'then') return resultPromise.then.bind(resultPromise);
+        if (prop === 'catch') return resultPromise.catch.bind(resultPromise);
+        if (prop === 'finally') return resultPromise.finally.bind(resultPromise);
+        if (prop === 'single' || prop === 'maybeSingle') {
+          return async () => ({ data: null, error: null });
+        }
+        return () => builder;
+      },
+    }
+  );
+  return builder;
+}
+
+export function createClient() {
+  return {
+    auth: {
+      getSession: async () => ({ data: { session: null }, error: null }),
+      getUser: async () => ({ data: { user: null }, error: null }),
+      onAuthStateChange: () => ({
+        data: { subscription: { unsubscribe: () => undefined } },
+      }),
+      signInWithPassword: async () => ({ data: { user: null, session: null }, error: null }),
+      signInWithOtp: async () => ({ data: { user: null, session: null }, error: null }),
+      signUp: async () => ({ data: { user: null, session: null }, error: null }),
+      signOut: async () => ({ error: null }),
+      startAutoRefresh: () => undefined,
+      stopAutoRefresh: () => undefined,
+    },
+    from: () => createSupabaseQueryBuilder(),
+    rpc: async () => ({ data: null, error: null }),
+    storage: {
+      from: () => ({
+        upload: async () => ({ data: { path: '' }, error: null }),
+        getPublicUrl: () => ({ data: { publicUrl: '' } }),
+        download: async () => ({ data: null, error: null }),
+        remove: async () => ({ data: [], error: null }),
+      }),
+    },
+    channel: () => {
+      const ch = {
+        on: () => ch,
+        subscribe: () => ch,
+        unsubscribe: async () => 'ok',
+      };
+      return ch;
+    },
+    removeChannel: async () => 'ok',
+    functions: {
+      invoke: async () => ({ data: null, error: null }),
+    },
+  };
+}
+
+function UniversalDefaultExportComponent(props: Record<string, unknown> = {}) {
+  if (props && typeof props === 'object') {
+    if (typeof props.name === 'string') {
+      return Ionicons(props as VectorIconProps);
+    }
+    if ('viewBox' in props || 'xmlns' in props) {
+      return React.createElement('svg', props, props.children as React.ReactNode);
+    }
+  }
+  return React.createElement(
+    View,
+    { style: props?.style as never },
+    props?.children as React.ReactNode
+  );
+}
+
+const defaultExportProperties = {
+  ...Animated,
+  ...AsyncStorage,
+  ...Constants,
+  Ionicons,
+  Feather,
+  MaterialIcons,
+  MaterialCommunityIcons,
+  FontAwesome,
+  FontAwesome5,
+  FontAwesome6,
+  AntDesign,
+  Entypo,
+  EvilIcons,
+  Foundation,
+  Octicons,
+  SimpleLineIcons,
+  Zocial,
+  Fontisto,
+  LinearGradient,
+  BlurView,
+  Image,
+  ImageBackground,
+  FlashList,
+  Svg,
+  ImpactFeedbackStyle,
+  NotificationFeedbackType,
+  impactAsync,
+  notificationAsync,
+  selectionAsync,
+  useFonts,
+  loadAsync,
+  isLoaded,
+  preventAutoHideAsync,
+  hideAsync,
+  getItemAsync,
+  setItemAsync,
+  deleteItemAsync,
+  setStringAsync,
+  getStringAsync,
+  openURL,
+  createURL,
+  create,
+  useStore,
+  QueryClient,
+  QueryClientProvider,
+  useQueryClient,
+  useQuery,
+  useInfiniteQuery,
+  useMutation,
+  createClient,
+};
+
+Object.assign(UniversalDefaultExportComponent, defaultExportProperties);
+
+const defaultExportProxy = new Proxy(UniversalDefaultExportComponent, {
+  get(target, prop) {
+    if (prop in target) {
+      return (target as unknown as Record<string | symbol, unknown>)[prop];
+    }
+    if (prop in defaultExportProperties) {
+      return defaultExportProperties[prop as keyof typeof defaultExportProperties];
+    }
+    if (typeof prop === 'string' && /^[A-Z]/.test(prop)) {
+      return createVectorIconComponent(prop);
+    }
+    return () => undefined;
+  },
+});
 
 export default defaultExportProxy;

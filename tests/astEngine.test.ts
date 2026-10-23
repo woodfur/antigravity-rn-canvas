@@ -23,6 +23,18 @@ import {
 import { initProject, findAvailablePort } from '../bin/cli.mjs';
 import { viteVirtualScreensPlugin } from '../plugins/viteVirtualScreensPlugin';
 import { viteReactNativeFallbackPlugin } from '../plugins/viteReactNativeFallbackPlugin';
+import DefaultShim, {
+  create,
+  useQuery,
+  createClient,
+  Ionicons,
+} from '../src/runtime/MockNavigationContext';
+import RNDefault, {
+  PermissionsAndroid,
+  ToastAndroid,
+  PlatformColor,
+  requireNativeComponent,
+} from '../src/runtime/reactNativeShim';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_ROOT = path.resolve(__dirname, '..');
@@ -341,32 +353,103 @@ describe('Antigravity React Native Visual Canvas — AST Engine', () => {
     expect(resolvedId).toBeTruthy();
     const virtualCode = virtualPlugin.load(resolvedId!);
     expect(virtualCode).toContain('createIsolatedScreenComponent');
-    expect(virtualCode).toContain('(attempt) => attempt > 0 ? import(');
+    expect(virtualCode).toContain('(attempt) => import(/* @vite-ignore */ "/@fs/');
 
     const tmpScreenDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zelune-fallback-test-'));
     try {
       const sampleScreen = path.join(tmpScreenDir, 'CameraScreen.tsx');
+      // Deliberately omit semicolons (Prettier semi: false) across multiple imports
       fs.writeFileSync(
         sampleScreen,
-        `import { CameraView, useCameraPermissions } from 'expo-camera';\nimport { Ionicons } from '@expo/vector-icons';\n`,
+        [
+          `import { View, Text, PermissionsAndroid, useAnimatedValue } from 'react-native'`,
+          `import { useRouter, useLocalSearchParams, CustomFutureHook } from 'expo-router'`,
+          `import { CameraView, useCameraPermissions } from 'expo-camera'`,
+          `import { Home, FutureLucideIcon999 } from 'lucide-react-native'`,
+          `import { MissingHelper } from './unbuilt/generated'`,
+          `export { ReExportedSymbol } from 'react-native-Uninstalled-pkg'`,
+        ].join('\n'),
         'utf8'
       );
 
       const fallbackPlugin = viteReactNativeFallbackPlugin(
         tmpScreenDir,
-        path.join(WORKSPACE_ROOT, 'src/runtime/MockNavigationContext.tsx')
+        path.join(WORKSPACE_ROOT, 'src/runtime/MockNavigationContext.tsx'),
+        tmpScreenDir
       ) as {
         resolveId: (source: string, importer?: string) => string | null;
         load: (id: string) => string | null;
       };
 
+      // 1. Semicolon-free multiline import extraction for expo-camera
       const cameraStubId = fallbackPlugin.resolveId('expo-camera', sampleScreen);
       expect(cameraStubId).toContain('virtual:zelune-native-stub:');
       const cameraStubCode = fallbackPlugin.load(cameraStubId!);
       expect(cameraStubCode).toContain('export const CameraView =');
       expect(cameraStubCode).toContain('export const useCameraPermissions =');
+
+      // 2. Semicolon-free multiline import extraction for expo-router (re-exports KnownShims + synthesizes CustomFutureHook)
+      const routerStubId = fallbackPlugin.resolveId('expo-router', sampleScreen);
+      expect(routerStubId).toContain('virtual:zelune-native-stub:');
+      const routerStubCode = fallbackPlugin.load(routerStubId!);
+      expect(routerStubCode).toContain('export * from');
+      expect(routerStubCode).toContain('export const CustomFutureHook =');
+
+      // 3. lucide-react-native synthesizes fallback icon for FutureLucideIcon999
+      const lucideStubId = fallbackPlugin.resolveId('lucide-react-native', sampleScreen);
+      expect(lucideStubId).toContain('virtual:zelune-lucide-stub:');
+      const lucideStubCode = fallbackPlugin.load(lucideStubId!);
+      expect(lucideStubCode).toContain("export * from 'lucide-react';");
+      expect(lucideStubCode).toContain('export const FutureLucideIcon999 =');
+
+      // 4. react-native resolves to reactNativeShim.ts and deep subpath resolves to virtual stub
+      const rnResolved = fallbackPlugin.resolveId('react-native', sampleScreen);
+      expect(rnResolved).toContain('reactNativeShim.ts');
+      const rnSubpathResolved = fallbackPlugin.resolveId(
+        'react-native/Libraries/Utilities/codegenNativeComponent',
+        sampleScreen
+      );
+      expect(rnSubpathResolved).toContain('virtual:zelune-native-stub:');
+
+      // 5. Missing relative local file in target project falls back to virtual stub instead of crashing (even when Vite injects ?import&)
+      const missingRelStubId = fallbackPlugin.resolveId('./unbuilt/generated', sampleScreen);
+      expect(missingRelStubId).toContain('virtual:zelune-native-stub:');
+      const missingRelWithImportQuery = missingRelStubId!.replace('?exports=', '?import&exports=');
+      const missingRelStubCode = fallbackPlugin.load(missingRelWithImportQuery);
+      expect(missingRelStubCode).toContain('export const MissingHelper =');
+
+      // 6. Barrel export { ... } from '...' extraction
+      const reExportStubId = fallbackPlugin.resolveId('react-native-Uninstalled-pkg', sampleScreen);
+      const reExportStubCode = fallbackPlugin.load(reExportStubId!);
+      expect(reExportStubCode).toContain('export const ReExportedSymbol =');
     } finally {
       fs.rmSync(tmpScreenDir, { recursive: true, force: true });
     }
+
+    // 7. Verify callable DefaultShim (for default-imported icons/components) + Zustand/ReactQuery/Supabase/RN shims
+    expect(typeof DefaultShim).toBe('function');
+    const iconElement = (DefaultShim as unknown as (p: Record<string, unknown>) => unknown)({
+      name: 'home',
+      size: 20,
+    });
+    expect(iconElement).toBeTruthy();
+    expect(DefaultShim.Ionicons).toBe(Ionicons);
+
+    const useCurriedStore = (
+      create as () => (init: (set: (p: unknown) => void) => { count: number }) => (
+        sel?: (s: { count: number }) => unknown
+      ) => unknown
+    )()(
+      () => ({ count: 42 })
+    );
+    expect(useCurriedStore((s) => s.count)).toBe(42);
+    expect(useQuery().status).toBe('success');
+    expect(typeof createClient().from).toBe('function');
+
+    expect(PermissionsAndroid.RESULTS.GRANTED).toBe('granted');
+    expect(ToastAndroid.SHORT).toBe(2000);
+    expect(PlatformColor('systemBackground')).toBe('#0F172A');
+    expect(typeof requireNativeComponent('RCTCustomMapView')).toBe('function');
+    expect(RNDefault.PermissionsAndroid).toBe(PermissionsAndroid);
   });
 });

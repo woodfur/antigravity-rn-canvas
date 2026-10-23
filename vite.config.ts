@@ -17,8 +17,20 @@ const rawTargetRoot = process.env.ANTIGRAVITY_TARGET_PROJECT
   ? path.resolve(process.env.ANTIGRAVITY_TARGET_PROJECT)
   : __dirname;
 
+const workspaceRoot = process.env.ANTIGRAVITY_WORKSPACE_ROOT
+  ? path.resolve(process.env.ANTIGRAVITY_WORKSPACE_ROOT)
+  : rawTargetRoot;
+
 const targetProjectRoot = findMobileAppRoot(rawTargetRoot);
 const mockNavShimPath = path.resolve(__dirname, 'src/runtime/MockNavigationContext.tsx');
+
+function safeRealpath(targetPath: string): string {
+  try {
+    return fs.realpathSync(targetPath);
+  } catch {
+    return path.resolve(targetPath);
+  }
+}
 
 function resolvePackageRootDir(pkgName: string): string {
   try {
@@ -33,29 +45,6 @@ const resolvedReactDir = resolvePackageRootDir('react');
 const resolvedReactDomDir = resolvePackageRootDir('react-dom');
 const resolvedRnWebDir = resolvePackageRootDir('react-native-web');
 const resolvedLucideDir = resolvePackageRootDir('lucide-react');
-
-const PROTECTED_CORE_ALIASES = new Set([
-  'react',
-  'react-dom',
-  'react-native',
-  'react-native-web',
-  'lucide-react',
-  'lucide-react-native',
-  '@react-navigation/native',
-  'expo-router',
-  'react-native-safe-area-context',
-  'expo-status-bar',
-  '__proto__',
-  'constructor',
-  'prototype',
-]);
-
-function stripJsonComments(input: string): string {
-  return input.replace(
-    /("(?:\\.|[^"\\])*")|\/\*[\s\S]*?\*\/|\/\/.*/g,
-    (_match, quotedString?: string) => quotedString ?? ''
-  );
-}
 
 /**
  * Loads only safe client-public environment variables (EXPO_PUBLIC_*, NEXT_PUBLIC_*, VITE_*)
@@ -105,49 +94,20 @@ function loadPublicProjectEnv(roots: string[]): Record<string, string> {
   return publicEnv;
 }
 
-function resolveTargetProjectPathAliases(projectRoot: string): Record<string, string> {
-  const normalizedRoot = path.resolve(projectRoot);
-  const aliases: Record<string, string> = {};
-  try {
-    const tsconfigPath = path.join(normalizedRoot, 'tsconfig.json');
-    if (fs.existsSync(tsconfigPath)) {
-      const raw = fs.readFileSync(tsconfigPath, 'utf-8');
-      const cleaned = stripJsonComments(raw);
-      const parsed = JSON.parse(cleaned) as {
-        compilerOptions?: {
-          baseUrl?: string;
-          paths?: Record<string, string[]>;
-        };
-      };
-      const baseUrl = parsed.compilerOptions?.baseUrl ?? '.';
-      const paths = parsed.compilerOptions?.paths ?? {};
-      for (const [pattern, targets] of Object.entries(paths)) {
-        if (!targets || targets.length === 0) continue;
-        const cleanKey = pattern.replace(/\/\*$/, '');
-        if (!cleanKey || PROTECTED_CORE_ALIASES.has(cleanKey)) continue;
-        const cleanTarget = targets[0].replace(/\/\*$/, '');
-        const resolvedTarget = path.resolve(normalizedRoot, baseUrl, cleanTarget);
-        if (
-          resolvedTarget === normalizedRoot ||
-          resolvedTarget.startsWith(normalizedRoot + path.sep)
-        ) {
-          aliases[cleanKey] = resolvedTarget;
-        }
-      }
-    }
-  } catch {
-    // Ignore malformed tsconfig.json and fall back to standard @ alias below
-  }
+const publicProjectEnv = loadPublicProjectEnv([workspaceRoot, rawTargetRoot, targetProjectRoot]);
 
-  if (!aliases['@']) {
-    const srcDir = path.join(normalizedRoot, 'src');
-    aliases['@'] = fs.existsSync(srcDir) ? srcDir : normalizedRoot;
-  }
-
-  return aliases;
-}
-
-const publicProjectEnv = loadPublicProjectEnv([rawTargetRoot, targetProjectRoot]);
+const allowedFsRoots = Array.from(
+  new Set([
+    __dirname,
+    safeRealpath(__dirname),
+    workspaceRoot,
+    safeRealpath(workspaceRoot),
+    rawTargetRoot,
+    safeRealpath(rawTargetRoot),
+    targetProjectRoot,
+    safeRealpath(targetProjectRoot),
+  ])
+);
 
 export default defineConfig({
   plugins: [
@@ -174,6 +134,19 @@ export default defineConfig({
       return '';
     }
   });
+  function createRequireProxy() {
+    var fn = function() { return proxy; };
+    var proxy = new Proxy(fn, {
+      get: function(_t, prop) {
+        if (prop === Symbol.toPrimitive) return function(hint) { return hint === 'number' ? 0 : ''; };
+        if (prop === 'valueOf') return function() { return 0; };
+        if (prop === 'toString') return function() { return ''; };
+        if (prop === 'uri' || prop === 'default') return '';
+        return proxy;
+      }
+    });
+    return proxy;
+  }
   window.global = window;
   window.__DEV__ = true;
   window.process = window.process || { env: envProxy, platform: 'browser', version: '', cwd: function() { return '/'; } };
@@ -182,19 +155,31 @@ export default defineConfig({
     if (typeof modId === 'string' && /\\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(modId)) {
       return { uri: modId, default: modId };
     }
-    return {};
+    return createRequireProxy();
   };
 })();
 </script>`;
         return html.replace('<head>', `<head>\n    ${envScript}`);
       },
     },
-    viteReactNativeFallbackPlugin(targetProjectRoot, mockNavShimPath),
+    viteReactNativeFallbackPlugin(targetProjectRoot, mockNavShimPath, workspaceRoot),
     viteVirtualScreensPlugin(targetProjectRoot),
     viteRnSourceInject(targetProjectRoot),
     react(),
     viteCanvasApiMiddleware(targetProjectRoot),
   ],
+  optimizeDeps: {
+    noDiscovery: true,
+    include: [
+      'react',
+      'react/jsx-runtime',
+      'react/jsx-dev-runtime',
+      'react-dom',
+      'react-dom/client',
+      'react-native-web',
+      'lucide-react',
+    ],
+  },
   esbuild: {
     // Ensure .tsx/.ts/.jsx/.js files (including RN .js files with JSX) are transpiled cleanly
     include: /\.(tsx|ts|jsx|js)$/,
@@ -204,17 +189,10 @@ export default defineConfig({
   resolve: {
     dedupe: ['react', 'react-dom', 'react-native-web'],
     alias: {
-      ...resolveTargetProjectPathAliases(targetProjectRoot),
       react: resolvedReactDir,
       'react-dom': resolvedReactDomDir,
-      'react-native': resolvedRnWebDir,
       'react-native-web': resolvedRnWebDir,
       'lucide-react': resolvedLucideDir,
-      'lucide-react-native': resolvedLucideDir,
-      '@react-navigation/native': mockNavShimPath,
-      'expo-router': mockNavShimPath,
-      'react-native-safe-area-context': mockNavShimPath,
-      'expo-status-bar': mockNavShimPath,
     },
     extensions: ['.web.tsx', '.web.ts', '.web.js', '.tsx', '.ts', '.jsx', '.js'],
   },
@@ -232,7 +210,8 @@ export default defineConfig({
     cors: false,
     allowedHosts: ['127.0.0.1', 'localhost', '::1'],
     fs: {
-      allow: Array.from(new Set([__dirname, rawTargetRoot, targetProjectRoot])),
+      strict: false,
+      allow: allowedFsRoots,
     },
   },
 });
