@@ -128,13 +128,17 @@ export function useRoute(): { key: string; name: string; params: Record<string, 
 }
 
 export function useFocusEffect(effect: () => void | (() => void)): void {
+  const ctx = useContext(MockNavigationContext);
+  const effectRef = useRef(effect);
+  effectRef.current = effect;
   useEffect(() => {
     try {
-      return effect();
+      const cleanup = effectRef.current();
+      return typeof cleanup === 'function' ? cleanup : undefined;
     } catch {
       return undefined;
     }
-  }, [effect]);
+  }, [ctx.currentRoute]);
 }
 
 export function useIsFocused(): boolean {
@@ -242,7 +246,7 @@ export function usePathname(): string {
 
 export function useSegments(): string[] {
   const ctx = useContext(MockNavigationContext);
-  return [ctx.currentRoute.toLowerCase()];
+  return useMemo(() => [ctx.currentRoute.toLowerCase()], [ctx.currentRoute]);
 }
 
 export function useRootNavigationState() {
@@ -973,51 +977,475 @@ export const QueryClientProvider: React.FC<{ client?: unknown; children?: React.
   children,
 }) => <>{children}</>;
 
+const singletonQueryClient = new QueryClient();
+
 export function useQueryClient() {
-  return new QueryClient();
+  return singletonQueryClient;
 }
+
+const STABLE_EMPTY_ARRAY: unknown[] = [];
+
+const STABLE_QUERY_RESULT = {
+  data: undefined,
+  error: null,
+  isLoading: false,
+  isPending: false,
+  isFetching: false,
+  isError: false,
+  isSuccess: true,
+  status: 'success',
+  refetch: async () => ({ data: undefined, error: null }),
+};
 
 export function useQuery() {
-  return {
-    data: undefined,
-    error: null,
-    isLoading: false,
-    isPending: false,
-    isFetching: false,
-    isError: false,
-    isSuccess: true,
-    status: 'success',
-    refetch: async () => ({ data: undefined, error: null }),
-  };
+  return STABLE_QUERY_RESULT;
 }
+
+const STABLE_INFINITE_QUERY_RESULT = {
+  data: { pages: STABLE_EMPTY_ARRAY, pageParams: STABLE_EMPTY_ARRAY },
+  error: null,
+  isLoading: false,
+  isPending: false,
+  isFetching: false,
+  isFetchingNextPage: false,
+  hasNextPage: false,
+  fetchNextPage: async () => ({}),
+  refetch: async () => ({}),
+};
 
 export function useInfiniteQuery() {
+  return STABLE_INFINITE_QUERY_RESULT;
+}
+
+const STABLE_MUTATION_RESULT = {
+  mutate: () => undefined,
+  mutateAsync: async () => ({}),
+  reset: () => undefined,
+  data: undefined,
+  error: null,
+  isLoading: false,
+  isPending: false,
+  isError: false,
+  isSuccess: false,
+  status: 'idle',
+};
+
+export function useMutation() {
+  return STABLE_MUTATION_RESULT;
+}
+
+// ============================================================================
+// 11. Universal Chainable Proxy, Zod, React Hook Form & Context Fallbacks
+// ============================================================================
+export function createSafeChainableProxy(): unknown {
+  const fnTarget = function (..._args: unknown[]) {
+    return proxy;
+  };
+  const proxy: unknown = new Proxy(fnTarget, {
+    get(_target, prop) {
+      if (prop === Symbol.toPrimitive) {
+        return (hint: string) => (hint === 'number' ? 0 : '');
+      }
+      if (prop === 'valueOf') return () => 0;
+      if (prop === 'toString') return () => '';
+      if (prop === Symbol.iterator) {
+        return function* () {
+          yield proxy;
+          yield proxy;
+        };
+      }
+      if (prop === 'then') {
+        return (onFulfilled?: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) =>
+          Promise.resolve({ data: null, error: null }).then(onFulfilled, onRejected);
+      }
+      if (prop === 'catch') return () => Promise.resolve({ data: null, error: null });
+      if (prop === 'finally')
+        return (cb?: () => void) => Promise.resolve({ data: null, error: null }).finally(cb);
+      if (prop === 'safeParse' || prop === 'spa' || prop === 'safeParseAsync') {
+        return (val?: unknown) => ({ success: true, data: val ?? {}, error: null });
+      }
+      if (prop === 'parse' || prop === 'parseAsync') {
+        return (val?: unknown) => val ?? {};
+      }
+      if (
+        prop === 'isLoading' ||
+        prop === 'loading' ||
+        prop === 'isPending' ||
+        prop === 'isError' ||
+        prop === 'disabled' ||
+        prop === 'isSubmitting'
+      ) {
+        return false;
+      }
+      if (
+        prop === 'isReady' ||
+        prop === 'granted' ||
+        prop === 'isSuccess' ||
+        prop === 'isAuthenticated' ||
+        prop === 'isValid'
+      ) {
+        return true;
+      }
+      if (prop === 'error' || prop === 'errors') return null;
+      if (prop === 'status') return 'granted';
+      if (prop === 'data' || prop === 'items' || prop === 'results' || prop === 'list') {
+        return STABLE_EMPTY_ARRAY;
+      }
+      if (prop === 'length' || prop === 'size' || prop === 'count' || prop === 'value') return 0;
+      if (prop === 'ref') return { current: null };
+      if (prop === 'map' || prop === 'filter' || prop === 'slice' || prop === 'flatMap') {
+        return () => STABLE_EMPTY_ARRAY;
+      }
+      if (prop === 'forEach') return () => undefined;
+      if (prop === 'reduce') return (_fn: unknown, init: unknown) => init;
+      if (prop === 'shape' || prop === '_def') return {};
+      return proxy;
+    },
+  });
+  return proxy;
+}
+
+export const SAFE_CHAINABLE_PROXY = createSafeChainableProxy();
+
+// Zod Shims (import { z } from 'zod' or import * as z from 'zod')
+export const z = SAFE_CHAINABLE_PROXY as Record<string, unknown>;
+export const string = () => SAFE_CHAINABLE_PROXY;
+export const number = () => SAFE_CHAINABLE_PROXY;
+export const boolean = () => SAFE_CHAINABLE_PROXY;
+export const object = () => SAFE_CHAINABLE_PROXY;
+export const array = () => SAFE_CHAINABLE_PROXY;
+export const union = () => SAFE_CHAINABLE_PROXY;
+export const literal = () => SAFE_CHAINABLE_PROXY;
+export const record = () => SAFE_CHAINABLE_PROXY;
+export const tuple = () => SAFE_CHAINABLE_PROXY;
+export const any = () => SAFE_CHAINABLE_PROXY;
+export const unknown = () => SAFE_CHAINABLE_PROXY;
+export const optional = () => SAFE_CHAINABLE_PROXY;
+export const nullable = () => SAFE_CHAINABLE_PROXY;
+export const coerce = SAFE_CHAINABLE_PROXY;
+export const zodResolver = () => async (values: unknown) => ({
+  values: values ?? {},
+  errors: {},
+});
+export const yupResolver = zodResolver;
+
+// Common React Native Sizing & Classname Utility Shims
+export const scale = (size: number) => size;
+export const verticalScale = (size: number) => size;
+export const moderateScale = (size: number) => size;
+export const moderateVerticalScale = (size: number) => size;
+export const s = scale;
+export const vs = verticalScale;
+export const ms = moderateScale;
+export const mvs = moderateVerticalScale;
+export const RFValue = (size: number) => size;
+export const RFPercentage = (pct: number) => Math.round(pct * 8);
+export const widthPercentageToDP = (pct: number | string) =>
+  typeof pct === 'number' ? Math.round((393 * pct) / 100) : 100;
+export const heightPercentageToDP = (pct: number | string) =>
+  typeof pct === 'number' ? Math.round((852 * pct) / 100) : 100;
+export const wp = widthPercentageToDP;
+export const hp = heightPercentageToDP;
+export const clsx = (...args: unknown[]) =>
+  args.filter((a): a is string => typeof a === 'string' && a.length > 0).join(' ');
+export const cn = clsx;
+export const twMerge = clsx;
+
+// React Hook Form Shims (react-hook-form)
+export function useForm(config?: { defaultValues?: Record<string, unknown> }) {
+  const defaults = config?.defaultValues ?? {};
   return {
-    data: { pages: [], pageParams: [] },
-    error: null,
-    isLoading: false,
-    isPending: false,
-    isFetching: false,
-    isFetchingNextPage: false,
-    hasNextPage: false,
-    fetchNextPage: async () => ({}),
-    refetch: async () => ({}),
+    control: {},
+    register: (name: string) => ({
+      name,
+      onChange: () => undefined,
+      onBlur: () => undefined,
+      ref: () => undefined,
+    }),
+    handleSubmit: (onValid?: (data: Record<string, unknown>) => unknown) => () =>
+      onValid?.(defaults),
+    watch: (name?: string) => (name ? defaults[name] ?? '' : defaults),
+    getValues: (name?: string) => (name ? defaults[name] : defaults),
+    setValue: () => undefined,
+    reset: () => undefined,
+    clearErrors: () => undefined,
+    setError: () => undefined,
+    trigger: async () => true,
+    formState: {
+      errors: {},
+      isDirty: false,
+      isLoading: false,
+      isSubmitted: false,
+      isSubmitting: false,
+      isSubmitSuccessful: false,
+      isValid: true,
+      dirtyFields: {},
+      touchedFields: {},
+    },
   };
 }
 
-export function useMutation() {
-  return {
-    mutate: () => undefined,
-    mutateAsync: async () => ({}),
-    reset: () => undefined,
-    data: undefined,
-    error: null,
-    isLoading: false,
-    isPending: false,
-    isError: false,
-    isSuccess: false,
-    status: 'idle',
-  };
+export const useFormContext = () => useForm();
+export const FormProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => (
+  <>{children}</>
+);
+export const useWatch = () => '';
+export const useFieldArray = () => ({
+  fields: STABLE_EMPTY_ARRAY,
+  append: () => undefined,
+  prepend: () => undefined,
+  remove: () => undefined,
+  insert: () => undefined,
+   move: () => undefined,
+  update: () => undefined,
+  replace: () => undefined,
+});
+
+export const Controller: React.FC<{
+  name?: string;
+  defaultValue?: unknown;
+  render?: (params: {
+    field: {
+      name: string;
+      value: unknown;
+      onChange: (...args: unknown[]) => void;
+      onBlur: () => void;
+      ref: () => void;
+    };
+    fieldState: { invalid: boolean; isTouched: boolean; isDirty: boolean; error: undefined };
+    formState: { errors: Record<string, unknown>; isSubmitting: boolean; isValid: boolean };
+  }) => React.ReactNode;
+  children?: React.ReactNode;
+}> = ({ name = '', defaultValue = '', render, children }) => {
+  if (typeof render === 'function') {
+    return (
+      <>
+        {render({
+          field: {
+            name,
+            value: defaultValue ?? '',
+            onChange: () => undefined,
+            onBlur: () => undefined,
+            ref: () => undefined,
+          },
+          fieldState: { invalid: false, isTouched: false, isDirty: false, error: undefined },
+          formState: { errors: {}, isSubmitting: false, isValid: true },
+        })}
+      </>
+    );
+  }
+  return <>{children}</>;
+};
+
+// Universal Unmounted Context Fallback (prevents "useAuth must be used within an AuthProvider")
+const previewUserBase: Record<string, unknown> = {
+  id: 'usr_preview_01',
+  uid: 'usr_preview_01',
+  email: 'alex.morgan@example.com',
+  name: 'Alex Morgan',
+  fullName: 'Alex Morgan',
+  full_name: 'Alex Morgan',
+  firstName: 'Alex',
+  first_name: 'Alex',
+  lastName: 'Morgan',
+  last_name: 'Morgan',
+  displayName: 'Alex Morgan',
+  display_name: 'Alex Morgan',
+  username: 'alexmorgan',
+  phone: '+1 (555) 019-2834',
+  phoneNumber: '+1 (555) 019-2834',
+  phone_number: '+1 (555) 019-2834',
+  role: 'buyer',
+  accountType: 'buyer',
+  account_type: 'buyer',
+  location: 'San Francisco, CA',
+  city: 'San Francisco',
+  bio: 'Product designer & automotive enthusiast.',
+  avatar: '',
+  avatarUrl: '',
+  avatar_url: '',
+  photoURL: '',
+  profileImage: '',
+  profile_image: '',
+  isVerified: true,
+  is_verified: true,
+  verified: true,
+  createdAt: '2025-01-15T10:00:00Z',
+  created_at: '2025-01-15T10:00:00Z',
+  user_metadata: {
+    full_name: 'Alex Morgan',
+    name: 'Alex Morgan',
+    email: 'alex.morgan@example.com',
+    role: 'buyer',
+    avatar_url: '',
+  },
+  app_metadata: {
+    provider: 'email',
+    role: 'buyer',
+  },
+};
+
+const previewUserProxy = new Proxy(previewUserBase, {
+  get(target, prop) {
+    if (prop in target) return target[prop as keyof typeof target];
+    if (prop === Symbol.toPrimitive) return () => 'Alex Morgan';
+    if (typeof prop === 'string') return '';
+    return undefined;
+  },
+});
+
+const previewColorsBase: Record<string, string> = {
+  primary: '#2563EB',
+  primaryLight: '#DBEAFE',
+  secondary: '#64748B',
+  accent: '#4F46E5',
+  background: '#FFFFFF',
+  backgroundSecondary: '#F8FAFC',
+  surface: '#F8FAFC',
+  card: '#FFFFFF',
+  text: '#0F172A',
+  textPrimary: '#0F172A',
+  textSecondary: '#475569',
+  textMuted: '#94A3B8',
+  muted: '#94A3B8',
+  placeholder: '#94A3B8',
+  border: '#E2E8F0',
+  divider: '#E2E8F0',
+  error: '#EF4444',
+  danger: '#EF4444',
+  success: '#10B981',
+  warning: '#F59E0B',
+  info: '#3B82F6',
+  white: '#FFFFFF',
+  black: '#0F172A',
+  tint: '#2563EB',
+  icon: '#64748B',
+  tabIconDefault: '#94A3B8',
+  tabIconSelected: '#2563EB',
+  notification: '#EF4444',
+};
+
+const previewColorsProxy = new Proxy(previewColorsBase, {
+  get(target, prop) {
+    if (prop in target) return target[prop as keyof typeof target];
+    return '#64748B';
+  },
+});
+
+const safeContextFallbackBase: Record<string, unknown> = {
+  user: previewUserProxy,
+  currentUser: previewUserProxy,
+  profile: previewUserProxy,
+  session: {
+    access_token: 'preview-access-token',
+    refresh_token: 'preview-refresh-token',
+    user: previewUserProxy,
+  },
+  isAuthenticated: true,
+  isLoggedIn: true,
+  isSignedIn: true,
+  isLoading: false,
+  loading: false,
+  isPending: false,
+  isRefreshing: false,
+  isInitialized: true,
+  isReady: true,
+  error: null,
+  theme: 'light',
+  colorScheme: 'light',
+  isDark: false,
+  dark: false,
+  colors: previewColorsProxy,
+  items: STABLE_EMPTY_ARRAY,
+  cart: STABLE_EMPTY_ARRAY,
+  favorites: STABLE_EMPTY_ARRAY,
+  wishlist: STABLE_EMPTY_ARRAY,
+  notifications: STABLE_EMPTY_ARRAY,
+  bookings: STABLE_EMPTY_ARRAY,
+  listings: STABLE_EMPTY_ARRAY,
+  vehicles: STABLE_EMPTY_ARRAY,
+  cars: STABLE_EMPTY_ARRAY,
+  orders: STABLE_EMPTY_ARRAY,
+  transactions: STABLE_EMPTY_ARRAY,
+  messages: STABLE_EMPTY_ARRAY,
+  chats: STABLE_EMPTY_ARRAY,
+  unreadCount: 0,
+  count: 0,
+  total: 0,
+  balance: 0,
+  signIn: async () => ({ data: { user: previewUserProxy }, error: null }),
+  signUp: async () => ({ data: { user: previewUserProxy }, error: null }),
+  signOut: async () => ({ error: null }),
+  login: async () => ({ data: { user: previewUserProxy }, error: null }),
+  logout: async () => undefined,
+  register: async () => ({ data: { user: previewUserProxy }, error: null }),
+  refresh: async () => undefined,
+  refetch: async () => undefined,
+  updateProfile: async () => ({ error: null }),
+  toggleTheme: () => undefined,
+  setTheme: () => undefined,
+};
+
+export const SAFE_CONTEXT_FALLBACK: Record<string, unknown> = new Proxy(safeContextFallbackBase, {
+  get(target, prop) {
+    if (prop in target) return target[prop as keyof typeof target];
+    if (prop === Symbol.iterator) {
+      return function* () {
+        yield SAFE_CONTEXT_FALLBACK;
+        yield () => undefined;
+      };
+    }
+    return SAFE_CHAINABLE_PROXY;
+  },
+});
+
+// Install unmounted user-context fallback on React.createContext & React.useContext
+// (runs after react-native-web has already initialized its internal VirtualizedListContext)
+const origCreateContext = React.createContext;
+const origUseContext = React.useContext;
+
+const wrappedCreateContext = function zeluneCreateContext(
+  defaultValue: unknown,
+  ...rest: unknown[]
+) {
+  const isEmptyDefault =
+    defaultValue === undefined ||
+    defaultValue === null ||
+    (typeof defaultValue === 'object' &&
+      defaultValue !== null &&
+      Object.keys(defaultValue as object).length === 0);
+  const effectiveDefault = isEmptyDefault ? SAFE_CONTEXT_FALLBACK : defaultValue;
+  const ctx = (origCreateContext as (...a: unknown[]) => Record<string, unknown>).call(
+    React,
+    effectiveDefault,
+    ...rest
+  );
+  if (ctx && typeof ctx === 'object' && isEmptyDefault) {
+    ctx.__zeluneUserContext = true;
+  }
+  return ctx;
+} as unknown as typeof React.createContext;
+
+const wrappedUseContext = function zeluneUseContext(
+  Context: React.Context<unknown>,
+  ...rest: unknown[]
+) {
+  const val = (origUseContext as (...a: unknown[]) => unknown).call(React, Context, ...rest);
+  if (
+    val === undefined ||
+    (val === null &&
+      Boolean((Context as unknown as Record<string, unknown>)?.__zeluneUserContext))
+  ) {
+    return SAFE_CONTEXT_FALLBACK;
+  }
+  return val;
+} as unknown as typeof React.useContext;
+
+try {
+  React.createContext = wrappedCreateContext;
+  React.useContext = wrappedUseContext;
+} catch {
+  // Ignore if React namespace is frozen in test environment
 }
 
 function createSupabaseQueryBuilder(): Record<string, unknown> {
@@ -1146,6 +1574,29 @@ const defaultExportProperties = {
   useInfiniteQuery,
   useMutation,
   createClient,
+  z,
+  string,
+  number,
+  boolean,
+  object,
+  array,
+  union,
+  literal,
+  record,
+  tuple,
+  any,
+  unknown,
+  optional,
+  nullable,
+  coerce,
+  zodResolver,
+  yupResolver,
+  useForm,
+  useFormContext,
+  FormProvider,
+  useWatch,
+  useFieldArray,
+  Controller,
 };
 
 Object.assign(UniversalDefaultExportComponent, defaultExportProperties);
@@ -1161,7 +1612,7 @@ const defaultExportProxy = new Proxy(UniversalDefaultExportComponent, {
     if (typeof prop === 'string' && /^[A-Z]/.test(prop)) {
       return createVectorIconComponent(prop);
     }
-    return () => undefined;
+    return SAFE_CHAINABLE_PROXY;
   },
 });
 

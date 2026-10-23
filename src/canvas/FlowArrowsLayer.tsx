@@ -11,7 +11,7 @@ interface FlowArrowsLayerProps {
 
 const ARTBOARD_HEADER_OFFSET = 38;
 
-export const FlowArrowsLayer: React.FC<FlowArrowsLayerProps> = ({
+export const FlowArrowsLayer: React.FC<FlowArrowsLayerProps> = React.memo(({
   screens,
   layout,
   activeScreenId,
@@ -194,4 +194,4 @@ export const FlowArrowsLayer: React.FC<FlowArrowsLayerProps> = ({
       })}
     </svg>
   );
-};
+});

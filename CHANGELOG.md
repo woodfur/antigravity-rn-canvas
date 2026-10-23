@@ -2,6 +2,19 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.5.5] - 2026-10-23
+
+### Added
+- **Zod, React Hook Form & Sizing Utility Shims (`src/runtime/MockNavigationContext.tsx`, `plugins/viteReactNativeFallbackPlugin.ts`)**: Added `createSafeChainableProxy()` / `SAFE_CHAINABLE_PROXY` (wrapping a callable function target in a recursive `Proxy` for unlimited method/property chains), full Zod schema shims (`z`, `string`, `number`, `boolean`, `object`, `array`, `union`, `literal`, `record`, `tuple`, `any`, `unknown`, `optional`, `nullable`, `coerce`, `zodResolver`, `yupResolver`), React Hook Form shims (`useForm`, `useFormContext`, `FormProvider`, `useWatch`, `useFieldArray`, `Controller` supporting `render={({ field, fieldState, formState }) => ...}`), and React Native responsive sizing/classname helpers (`scale`, `verticalScale`, `moderateScale`, `RFValue`, `RFPercentage`, `wp`, `hp`, `clsx`, `cn`, `twMerge`).
+- **Universal Unmounted React Context Fallback (`src/runtime/MockNavigationContext.tsx`, `src/main.tsx`)**: Wrapped `React.createContext` and `React.useContext` (after `react-native-web` initializes its internal contexts) with `SAFE_CONTEXT_FALLBACK` (pre-populated with preview `user`, `profile`, `session`, `isAuthenticated: true`, `isLoading: false`, `colors`, `items: []`, `signIn`, `signOut`, `logout`, `refresh`, etc.) so screens rendered outside their root `app/_layout.tsx` providers never throw `useAuth must be used within an AuthProvider` (or `useTheme` / `useCart` / `useNotifications` equivalents).
+
+### Fixed
+- **Eliminated Canvas Panning Vibration / Jitter (`src/canvas/CanvasApp.tsx`, `src/canvas/ScreenArtboard.tsx`, `src/canvas/FlowArrowsLayer.tsx`)**:
+  - Updated `handleCanvasWheel` and `handleCanvasPointerDown` in `CanvasApp.tsx` to mutate `worldContainerRef.current.style.transform` (`translate3d(...) scale(...)`) directly on the DOM node with device-pixel rounding (`snapToDevicePixel`) and debounce `setPan` state synchronization to 120ms after movement stops, eliminating 120Hz React re-renders of all artboards while panning.
+  - Wrapped `ScreenArtboard` and `FlowArrowsLayer` in `React.memo`, scoped `selectedElement` and `inspectedElement` props to only the active screen, and suppressed `handlePointerMoveCapture` (`computeRelativeBox` / `setHoverBox`) while the canvas is moving or pointer buttons are pressed.
+  - Stabilized `useFocusEffect`, `useSegments`, `useQuery`, `useInfiniteQuery`, `useMutation`, and `useQueryClient` in `MockNavigationContext.tsx` so screens with inline `useFocusEffect` or `useEffect` dependencies do not trigger continuous re-render loops.
+- **Light-Themed Screen Root Background & Image Overflow (`src/canvas/ScreenArtboard.tsx`)**: Set `backgroundColor: '#FFFFFF'`, `color: '#0F172A'`, `overflowY: 'auto'`, `overflowX: 'hidden'`, `minWidth: 0`, and `minHeight: 0` on the inner `<ScreenComponent />` mount container so screens that rely on React Native's default white root window background render with proper contrast and horizontally overflowing images are clipped to the 393px device frame.
+
 ## [1.5.4] - 2026-10-23
 
 ### Added

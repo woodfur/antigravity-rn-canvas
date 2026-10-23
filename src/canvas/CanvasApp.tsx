@@ -45,6 +45,11 @@ function clampZoom(z: number): number {
   return Number(Math.min(Math.max(z, MIN_ZOOM), MAX_ZOOM).toFixed(3));
 }
 
+function snapToDevicePixel(v: number): number {
+  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+  return Math.round(v * dpr) / dpr;
+}
+
 function buildDefaultLayout(screens: ScreenMetadata[]): ArtboardLayoutMap {
   const map: ArtboardLayoutMap = {};
   screens.forEach((screen, idx) => {
@@ -128,7 +133,9 @@ export const CanvasApp: React.FC = () => {
   }>({ undoAvailable: 0, redoAvailable: 0 });
 
   const canvasViewportRef = useRef<HTMLDivElement | null>(null);
+  const worldContainerRef = useRef<HTMLDivElement | null>(null);
   const cameraTimerRef = useRef<number | null>(null);
+  const panSyncTimerRef = useRef<number | null>(null);
 
   // Refs for synchronous access inside non-passive native wheel/gesture listeners
   const zoomRef = useRef<number>(zoom);
@@ -139,6 +146,39 @@ export const CanvasApp: React.FC = () => {
   useEffect(() => {
     panRef.current = pan;
   }, [pan]);
+
+  const applyDirectPanTransform = useCallback(
+    (rawX: number, rawY: number, commitImmediately = false) => {
+      const nextPan = {
+        x: snapToDevicePixel(rawX),
+        y: snapToDevicePixel(rawY),
+      };
+      panRef.current = nextPan;
+
+      const worldEl = worldContainerRef.current;
+      if (worldEl) {
+        worldEl.style.transition = 'none';
+        worldEl.style.transform = `translate3d(${nextPan.x}px, ${nextPan.y}px, 0) scale(${zoomRef.current})`;
+      }
+
+      if (panSyncTimerRef.current) {
+        window.clearTimeout(panSyncTimerRef.current);
+        panSyncTimerRef.current = null;
+      }
+
+      if (commitImmediately) {
+        setIsCameraAnimating(false);
+        setPan(nextPan);
+      } else {
+        panSyncTimerRef.current = window.setTimeout(() => {
+          panSyncTimerRef.current = null;
+          setIsCameraAnimating(false);
+          setPan(panRef.current);
+        }, 120);
+      }
+    },
+    []
+  );
 
   const triggerCameraTransition = useCallback(() => {
     if (cameraTimerRef.current) {
@@ -462,13 +502,17 @@ export const CanvasApp: React.FC = () => {
       const worldY = (cursorY - prevPan.y) / prevZoom;
 
       const nextPan = {
-        x: cursorX - worldX * nextZoom,
-        y: cursorY - worldY * nextZoom,
+        x: snapToDevicePixel(cursorX - worldX * nextZoom),
+        y: snapToDevicePixel(cursorY - worldY * nextZoom),
       };
 
       setIsCameraAnimating(false);
       zoomRef.current = nextZoom;
       panRef.current = nextPan;
+      if (worldContainerRef.current) {
+        worldContainerRef.current.style.transition = 'none';
+        worldContainerRef.current.style.transform = `translate3d(${nextPan.x}px, ${nextPan.y}px, 0) scale(${nextZoom})`;
+      }
       setZoom(nextZoom);
       setPan(nextPan);
     };
@@ -483,13 +527,11 @@ export const CanvasApp: React.FC = () => {
         const zoomFactor = Math.exp(-e.deltaY * 0.0085);
         applyFocalZoom(zoomRef.current * zoomFactor, e.clientX, e.clientY);
       } else {
-        setIsCameraAnimating(false);
-        const nextPan = {
-          x: panRef.current.x - e.deltaX,
-          y: panRef.current.y - e.deltaY,
-        };
-        panRef.current = nextPan;
-        setPan(nextPan);
+        applyDirectPanTransform(
+          panRef.current.x - e.deltaX,
+          panRef.current.y - e.deltaY,
+          false
+        );
       }
     };
 
@@ -537,7 +579,7 @@ export const CanvasApp: React.FC = () => {
       document.removeEventListener('gesturechange', handleGestureChange);
       document.removeEventListener('gestureend', handleGestureEnd);
     };
-  }, []);
+  }, [applyDirectPanTransform]);
 
   // Center viewport on a specific screen artboard using Emil Kowalski ease-out-expo camera physics
   const focusOnScreen = useCallback(
@@ -630,7 +672,14 @@ export const CanvasApp: React.FC = () => {
     [focusOnScreen]
   );
 
-  // Canvas background pointer pan (0ms direct manipulation override)
+  const handleSelectFlow = useCallback(
+    (edge: NavigationEdge) => {
+      focusOnScreen(edge.toScreen);
+    },
+    [focusOnScreen]
+  );
+
+  // Canvas background pointer pan (0ms direct DOM manipulation override)
   const handleCanvasPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0 && e.button !== 1) return;
     setIsCameraAnimating(false);
@@ -638,20 +687,20 @@ export const CanvasApp: React.FC = () => {
 
     const startX = e.clientX;
     const startY = e.clientY;
-    const startPanX = pan.x;
-    const startPanY = pan.y;
+    const startPanX = panRef.current.x;
+    const startPanY = panRef.current.y;
 
     const handleMove = (moveEvent: PointerEvent) => {
-      const nextPan = {
-        x: startPanX + (moveEvent.clientX - startX),
-        y: startPanY + (moveEvent.clientY - startY),
-      };
-      panRef.current = nextPan;
-      setPan(nextPan);
+      applyDirectPanTransform(
+        startPanX + (moveEvent.clientX - startX),
+        startPanY + (moveEvent.clientY - startY),
+        false
+      );
     };
 
     const handleUp = () => {
       setIsPanning(false);
+      applyDirectPanTransform(panRef.current.x, panRef.current.y, true);
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
     };
@@ -1299,6 +1348,7 @@ export const CanvasApp: React.FC = () => {
 
           {/* World Transform Container: Emil Kowalski ease-out-expo on camera focus, 0ms on direct drag/pinch */}
           <div
+            ref={worldContainerRef}
             style={{
               position: 'absolute',
               top: 0,
@@ -1306,6 +1356,7 @@ export const CanvasApp: React.FC = () => {
               transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
               transformOrigin: '0 0',
               willChange: 'transform',
+              backfaceVisibility: 'hidden',
               transition: isCameraAnimating
                 ? 'transform var(--duration-camera) var(--ease-out-expo)'
                 : 'none',
@@ -1317,7 +1368,7 @@ export const CanvasApp: React.FC = () => {
                 layout={layout}
                 activeScreenId={activeScreenId}
                 highlightedScreenId={highlightedScreenId}
-                onSelectFlow={(edge: NavigationEdge) => focusOnScreen(edge.toScreen)}
+                onSelectFlow={handleSelectFlow}
               />
             )}
 
@@ -1329,6 +1380,7 @@ export const CanvasApp: React.FC = () => {
                 height: DEFAULT_HEIGHT,
               };
               const ScreenComponent = SCREEN_COMPONENTS[screen.id];
+              const isSelectedScreen = selectedElement?.screenId === screen.id;
 
               return (
                 <ScreenArtboard
@@ -1340,8 +1392,9 @@ export const CanvasApp: React.FC = () => {
                   mode={mode}
                   isActiveScreen={activeScreenId === screen.id}
                   isHighlightedScreen={highlightedScreenId === screen.id}
-                  selectedElement={selectedElement}
-                  inspectedElement={inspectedData}
+                  isCanvasMoving={isPanning}
+                  selectedElement={isSelectedScreen ? selectedElement : null}
+                  inspectedElement={isSelectedScreen ? inspectedData : null}
                   onSelectElement={handleSelectElement}
                   onSelectScreen={setActiveScreenId}
                   onFocusScreen={focusOnScreen}

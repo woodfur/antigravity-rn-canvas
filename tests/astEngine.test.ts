@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import React from 'react';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -28,6 +29,12 @@ import DefaultShim, {
   useQuery,
   createClient,
   Ionicons,
+  z,
+  useForm,
+  Controller,
+  zodResolver,
+  SAFE_CHAINABLE_PROXY,
+  SAFE_CONTEXT_FALLBACK,
 } from '../src/runtime/MockNavigationContext';
 import RNDefault, {
   PermissionsAndroid,
@@ -451,5 +458,51 @@ describe('Antigravity React Native Visual Canvas — AST Engine', () => {
     expect(PlatformColor('systemBackground')).toBe('#0F172A');
     expect(typeof requireNativeComponent('RCTCustomMapView')).toBe('function');
     expect(RNDefault.PermissionsAndroid).toBe(PermissionsAndroid);
+
+    // 8. Verify Zod unlimited chaining (z.string().email().min(8).max(32)), React Hook Form, and Unmounted Context Fallback
+    const signupSchema = (z as Record<string, (...a: unknown[]) => unknown>).object({
+      email: (
+        (z as Record<string, () => Record<string, (...a: unknown[]) => unknown>>).string() as Record<
+          string,
+          (...a: unknown[]) => Record<string, (...a: unknown[]) => unknown>
+        >
+      )
+        .email('Invalid email')
+        .min(5),
+      password: (
+        (z as Record<string, () => Record<string, (...a: unknown[]) => unknown>>).string() as Record<
+          string,
+          (...a: unknown[]) => Record<string, (...a: unknown[]) => unknown>
+        >
+      )
+        .min(8)
+        .max(32)
+        .optional(),
+    }) as Record<string, (v: unknown) => { success: boolean; data: unknown }>;
+    expect(signupSchema.safeParse({ email: 'test@example.com' }).success).toBe(true);
+    expect(typeof zodResolver()).toBe('function');
+
+    const form = useForm({ defaultValues: { email: 'alex@example.com' } });
+    expect(form.getValues('email')).toBe('alex@example.com');
+    expect(form.formState.isValid).toBe(true);
+    const controllerNode = Controller({
+      name: 'email',
+      defaultValue: 'alex@example.com',
+      render: ({ field }) => field.value as React.ReactNode,
+    });
+    expect(controllerNode).toBeTruthy();
+
+    // Unmounted user context created via React.createContext(undefined) or React.createContext(null)
+    // automatically receives SAFE_CONTEXT_FALLBACK as its default value so useAuth() never throws
+    const AuthContextUndefined = React.createContext<Record<string, unknown> | undefined>(undefined);
+    const AuthContextNull = React.createContext<Record<string, unknown> | null>(null);
+    const defaultValUndefined = (AuthContextUndefined as unknown as { _currentValue: Record<string, unknown> })._currentValue;
+    const defaultValNull = (AuthContextNull as unknown as { _currentValue: Record<string, unknown> })._currentValue;
+    expect(defaultValUndefined).toBe(SAFE_CONTEXT_FALLBACK);
+    expect(defaultValNull).toBe(SAFE_CONTEXT_FALLBACK);
+    expect(defaultValUndefined.isAuthenticated).toBe(true);
+    expect(defaultValUndefined.isLoading).toBe(false);
+    expect((defaultValUndefined.user as Record<string, unknown>).name).toBe('Alex Morgan');
+    expect(typeof SAFE_CHAINABLE_PROXY).toBe('function');
   });
 });

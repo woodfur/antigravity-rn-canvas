@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './runtime/MockNavigationContext';
 import { CanvasApp } from './canvas/CanvasApp';
 import './styles.css';
 

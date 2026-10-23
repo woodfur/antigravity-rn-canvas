@@ -29,6 +29,7 @@ interface ScreenArtboardProps {
   mode: CanvasMode;
   isActiveScreen: boolean;
   isHighlightedScreen: boolean;
+  isCanvasMoving?: boolean;
   selectedElement: SelectedElementRef | null;
   inspectedElement: InspectedElement | null;
   onSelectElement: (ref: SelectedElementRef) => void;
@@ -83,7 +84,7 @@ function escapeAstPathSelector(astPath: string): string {
     : astPath.replace(/["\\]/g, '\\$&');
 }
 
-export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
+export const ScreenArtboard: React.FC<ScreenArtboardProps> = React.memo(({
   screen,
   ScreenComponent,
   position,
@@ -91,6 +92,7 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
   mode,
   isActiveScreen,
   isHighlightedScreen,
+  isCanvasMoving = false,
   selectedElement,
   inspectedElement,
   onSelectElement,
@@ -732,8 +734,14 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
   };
 
   // Inspect Mode pointer handlers
+  useEffect(() => {
+    if (isCanvasMoving) {
+      setHoverBox(null);
+    }
+  }, [isCanvasMoving]);
+
   const handlePointerMoveCapture = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (mode !== 'inspect' || activeGizmoAction) return;
+    if (mode !== 'inspect' || activeGizmoAction || isCanvasMoving || e.buttons !== 0) return;
     const targetEl = findNearestAgyElement(e.target, viewportRef.current);
     if (!targetEl) {
       setHoverBox(null);
@@ -992,6 +1000,12 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
                   flexDirection: 'column',
                   height: '100%',
                   width: '100%',
+                  minHeight: 0,
+                  minWidth: 0,
+                  backgroundColor: '#FFFFFF',
+                  color: '#0F172A',
+                  overflowY: 'auto',
+                  overflowX: 'hidden',
                 }}
               >
                 <ScreenComponent />
@@ -1474,4 +1488,4 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = ({
       </div>
     </div>
   );
-};
+});
