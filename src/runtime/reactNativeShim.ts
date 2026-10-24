@@ -1,7 +1,88 @@
 import React, { useRef } from 'react';
 import * as RNW from 'react-native-web';
+import { withNativeWind } from './nativewindShim';
 
 export * from 'react-native-web';
+
+// Wrap core React Native primitives with NativeWind className -> style support
+export const View = withNativeWind(RNW.View as unknown as React.ComponentType<Record<string, unknown>>, 'View');
+export const Text = withNativeWind(RNW.Text as unknown as React.ComponentType<Record<string, unknown>>, 'Text');
+export const Pressable = withNativeWind(
+  RNW.Pressable as unknown as React.ComponentType<Record<string, unknown>>,
+  'Pressable'
+);
+export const TouchableOpacity = withNativeWind(
+  RNW.TouchableOpacity as unknown as React.ComponentType<Record<string, unknown>>,
+  'TouchableOpacity'
+);
+export const TouchableHighlight = withNativeWind(
+  RNW.TouchableHighlight as unknown as React.ComponentType<Record<string, unknown>>,
+  'TouchableHighlight'
+);
+export const TouchableWithoutFeedback = withNativeWind(
+  RNW.TouchableWithoutFeedback as unknown as React.ComponentType<Record<string, unknown>>,
+  'TouchableWithoutFeedback'
+);
+export const ScrollView = withNativeWind(
+  RNW.ScrollView as unknown as React.ComponentType<Record<string, unknown>>,
+  'ScrollView'
+);
+export const FlatList = withNativeWind(
+  RNW.FlatList as unknown as React.ComponentType<Record<string, unknown>>,
+  'FlatList'
+);
+export const SectionList = withNativeWind(
+  RNW.SectionList as unknown as React.ComponentType<Record<string, unknown>>,
+  'SectionList'
+);
+export const KeyboardAvoidingView = withNativeWind(
+  RNW.KeyboardAvoidingView as unknown as React.ComponentType<Record<string, unknown>>,
+  'KeyboardAvoidingView'
+);
+export const TextInput = withNativeWind(
+  RNW.TextInput as unknown as React.ComponentType<Record<string, unknown>>,
+  'TextInput'
+);
+export const Image = withNativeWind(
+  RNW.Image as unknown as React.ComponentType<Record<string, unknown>>,
+  'Image'
+);
+export const ImageBackground = withNativeWind(
+  RNW.ImageBackground as unknown as React.ComponentType<Record<string, unknown>>,
+  'ImageBackground'
+);
+export const SafeAreaView = withNativeWind(
+  RNW.SafeAreaView as unknown as React.ComponentType<Record<string, unknown>>,
+  'SafeAreaView'
+);
+export const ActivityIndicator = withNativeWind(
+  RNW.ActivityIndicator as unknown as React.ComponentType<Record<string, unknown>>,
+  'ActivityIndicator'
+);
+export const Modal = withNativeWind(
+  RNW.Modal as unknown as React.ComponentType<Record<string, unknown>>,
+  'Modal'
+);
+
+// Pin mobile artboard dimensions (393x852 iPhone 15 Pro) so Dimensions.get('window')
+// and useWindowDimensions() never return the desktop browser's 1440x900 window size.
+const ARTBOARD_DIMENSIONS = {
+  width: 393,
+  height: 852,
+  scale: 3,
+  fontScale: 1,
+};
+
+export const Dimensions = {
+  get: (_dim?: 'window' | 'screen' | string) => ARTBOARD_DIMENSIONS,
+  set: () => undefined,
+  addEventListener: () => ({ remove: () => undefined }),
+  removeEventListener: () => undefined,
+};
+
+export function useWindowDimensions() {
+  return ARTBOARD_DIMENSIONS;
+}
 
 export function useAnimatedValue(initialValue = 0): RNW.Animated.Value {
   const ref = useRef<RNW.Animated.Value | null>(null);
@@ -109,6 +190,24 @@ export const Settings = {
 const ReactNativeDefault = new Proxy(
   {
     ...RNW,
+    View,
+    Text,
+    Pressable,
+    TouchableOpacity,
+    TouchableHighlight,
+    TouchableWithoutFeedback,
+    ScrollView,
+    FlatList,
+    SectionList,
+    KeyboardAvoidingView,
+    TextInput,
+    Image,
+    ImageBackground,
+    SafeAreaView,
+    ActivityIndicator,
+    Modal,
+    Dimensions,
+    useWindowDimensions,
     useAnimatedValue,
     PermissionsAndroid,
     ToastAndroid,

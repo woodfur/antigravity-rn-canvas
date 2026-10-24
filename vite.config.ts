@@ -96,6 +96,62 @@ function loadPublicProjectEnv(roots: string[]): Record<string, string> {
 
 const publicProjectEnv = loadPublicProjectEnv([workspaceRoot, rawTargetRoot, targetProjectRoot]);
 
+function loadProjectTailwindTheme(roots: string[]): Record<string, unknown> {
+  const candidates = [
+    'tailwind.config.js',
+    'tailwind.config.cjs',
+    'tailwind.config.mjs',
+    'tailwind.config.ts',
+  ];
+  const uniqueRoots = Array.from(new Set(roots.map((r) => path.resolve(r))));
+  for (const rootDir of uniqueRoots) {
+    for (const fileName of candidates) {
+      const fullPath = path.join(rootDir, fileName);
+      try {
+        if (!fs.existsSync(fullPath)) continue;
+        const raw = fs.readFileSync(fullPath, 'utf-8');
+        const cleaned = raw
+          .replace(/^import\s+.*$/gm, '')
+          .replace(/export\s+default\s+/, 'module.exports = ');
+        const mod = { exports: {} as Record<string, unknown> };
+        const fakeRequire = () => ({});
+        const fn = new Function('module', 'exports', 'require', cleaned);
+        fn(mod, mod.exports, fakeRequire);
+        const cfg = mod.exports as {
+          theme?: Record<string, unknown> & { extend?: Record<string, unknown> };
+        };
+        if (cfg?.theme && typeof cfg.theme === 'object') {
+          const baseTheme = { ...cfg.theme };
+          const extendTheme =
+            cfg.theme.extend && typeof cfg.theme.extend === 'object' ? cfg.theme.extend : {};
+          delete baseTheme.extend;
+          const merged: Record<string, unknown> = { ...baseTheme };
+          for (const [k, v] of Object.entries(extendTheme)) {
+            if (v && typeof v === 'object' && !Array.isArray(v)) {
+              merged[k] = {
+                ...((baseTheme[k] as Record<string, unknown>) ?? {}),
+                ...(v as Record<string, unknown>),
+              };
+            } else {
+              merged[k] = v;
+            }
+          }
+          return merged;
+        }
+      } catch {
+        // Ignore tailwind config parse errors
+      }
+    }
+  }
+  return {};
+}
+
+const projectTailwindTheme = loadProjectTailwindTheme([
+  targetProjectRoot,
+  rawTargetRoot,
+  workspaceRoot,
+]);
+
 const allowedFsRoots = Array.from(
   new Set([
     __dirname,
@@ -115,8 +171,10 @@ export default defineConfig({
       name: 'vite-zelune-process-env-shim',
       transformIndexHtml(html) {
         const serializedEnv = JSON.stringify(publicProjectEnv);
+        const serializedTailwindTheme = JSON.stringify(projectTailwindTheme);
         const envScript = `<script>
 (function() {
+  window.__ZELUNE_TAILWIND_THEME__ = ${serializedTailwindTheme};
   var baseEnv = ${serializedEnv};
   var envProxy = new Proxy(baseEnv, {
     get: function(target, prop) {

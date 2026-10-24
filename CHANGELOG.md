@@ -2,6 +2,19 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.5.6] - 2026-10-24
+
+### Added
+- **NativeWind / Tailwind CSS `className` Runtime Engine (`src/runtime/nativewindShim.ts`, `src/runtime/reactNativeShim.ts`, `src/runtime/MockNavigationContext.tsx`, `vite.config.ts`)**:
+  - Automatically loads the target project's `tailwind.config.js` / `tailwind.config.ts` (`colors`, `fontSize`, `borderRadius`, `spacing`, `opacity`, `fontFamily`) in `vite.config.ts` and injects `window.__ZELUNE_TAILWIND_THEME__`.
+  - Added `resolveTailwindClassNameToStyle` and `withNativeWind` wrapper across all React Native and Expo primitives (`View`, `Text`, `Pressable`, `TouchableOpacity`, `ScrollView`, `FlatList`, `KeyboardAvoidingView`, `TextInput`, `Image`, `SafeAreaView`, `LinearGradient`, `BlurView`, `createAnimatedComponent`) so screens and UI components styled with NativeWind `className="..."` (including M3 semantic tokens like `bg-surface-container-high`, `text-on-surface`, `text-headline-md`, `text-title-sm`, `bg-primary/10`, etc.) render with full CSS styles instead of unstyled stacks.
+
+### Fixed
+- **Pinned Mobile Artboard `Dimensions` (`src/runtime/reactNativeShim.ts`, `src/runtime/MockNavigationContext.tsx`)**: Overrode `Dimensions.get('window' | 'screen')` and `useWindowDimensions()` to return `{ width: 393, height: 852, scale: 3, fontScale: 1 }` instead of the desktop browser window's `1440×900` dimensions, and upgraded the `expo-image` `<Image>` shim to use CSS `object-fit` inside an `overflow: hidden` container so carousel cards and hero images (e.g., on `HomeScreen`) size to exact 393×852 mobile proportions.
+- **Wide Zoom-Out Range (`MIN_ZOOM = 0.08`), Multi-Row Grid Layout & Zero-Re-Render Pinch Zoom (`src/canvas/CanvasApp.tsx`)**:
+  - Lowered `MIN_ZOOM` from `25%` (`0.25`) to `8%` (`0.08`), updated `buildDefaultLayout` ("Grid" button) to arrange 6+ screens into a balanced multi-row grid, and enabled automatic fit-all on initial load so all screens can be viewed at once.
+  - Updated `applyFocalZoom` to keep full floating-point precision during active trackpad pinch/Ctrl-wheel zoom (eliminating subpixel focal-point oscillation), mutate `worldContainerRef.current.style.transform` and `zoomLabelRef.current.textContent` directly on the DOM without triggering 120Hz React re-renders of `<ScreenArtboard />`, and removed `willChange: 'transform'` bitmap caching so zooming in and out is completely smooth and vibration-free.
+
 ## [1.5.5] - 2026-10-23
 
 ### Added

@@ -495,7 +495,7 @@ export function viteReactNativeFallbackPlugin(
         `      });`,
         `    }`,
         `    const content = typeof props?.children === 'function' ? props.children(SAFE_CHAINABLE_PROXY) : props?.children;`,
-        `    return React.createElement(View, { style: props?.style, ref }, content);`,
+        `    return React.createElement(View, { style: props?.style, className: props?.className, ref }, content);`,
         `  });`,
         `  Comp.displayName = displayName;`,
         `  return new Proxy(Comp, {`,

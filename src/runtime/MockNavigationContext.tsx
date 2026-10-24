@@ -11,6 +11,7 @@ import {
   ScrollView as RNScrollView,
   FlatList as RNFlatList,
 } from 'react-native';
+import { withNativeWind } from './nativewindShim';
 
 export interface NavigationController {
   navigate: (targetRoute: string, params?: Record<string, unknown>) => void;
@@ -291,16 +292,26 @@ export const SplashScreen = {
 // ============================================================================
 // 3. React Native Safe Area Context Shims (react-native-safe-area-context)
 // ============================================================================
-export const SafeAreaProvider: React.FC<{ children?: React.ReactNode; style?: unknown }> = ({
-  children,
-  style,
-}) => <View style={[{ flex: 1 }, style as never]}>{children}</View>;
+export const SafeAreaProvider: React.FC<{
+  children?: React.ReactNode;
+  style?: unknown;
+  className?: string;
+}> = ({ children, style, className, ...rest }) => (
+  <View className={className as never} style={[{ flex: 1 }, style as never]} {...rest}>
+    {children}
+  </View>
+);
 
 export const SafeAreaView: React.FC<{
   children?: React.ReactNode;
   style?: unknown;
+  className?: string;
   edges?: string[];
-}> = ({ children, style }) => <View style={[{ flex: 1 }, style as never]}>{children}</View>;
+}> = ({ children, style, className, edges: _edges, ...rest }) => (
+  <View className={className as never} style={[{ flex: 1 }, style as never]} {...rest}>
+    {children}
+  </View>
+);
 
 export function useSafeAreaInsets(): { top: number; right: number; bottom: number; left: number } {
   return { top: 0, right: 0, bottom: 0, left: 0 };
@@ -478,16 +489,27 @@ export function createIconSetFromFontello() {
 // 6. Expo Linear Gradient, Blur, Image & FlashList Shims
 // ============================================================================
 export const LinearGradient: React.FC<{
-  colors?: string[];
-  locations?: number[];
+  colors?: readonly string[] | string[];
+  locations?: readonly number[] | number[];
   start?: { x: number; y: number } | [number, number];
   end?: { x: number; y: number } | [number, number];
   style?: unknown;
+  className?: string;
   children?: React.ReactNode;
-}> = ({ colors = ['#1E293B', '#0F172A'], style, children }) => {
+}> = ({
+  colors = ['#1E293B', '#0F172A'],
+  locations: _locations,
+  start: _start,
+  end: _end,
+  style,
+  className,
+  children,
+  ...rest
+}) => {
   const safeColors = Array.isArray(colors) && colors.length >= 2 ? colors : ['#1E293B', '#0F172A'];
   return (
     <View
+      className={className as never}
       style={[
         {
           backgroundColor: safeColors[0],
@@ -495,6 +517,7 @@ export const LinearGradient: React.FC<{
         } as never,
         style as never,
       ]}
+      {...rest}
     >
       {children}
     </View>
@@ -505,11 +528,13 @@ export const BlurView: React.FC<{
   intensity?: number;
   tint?: string;
   style?: unknown;
+  className?: string;
   children?: React.ReactNode;
-}> = ({ intensity = 40, tint = 'dark', style, children }) => {
+}> = ({ intensity = 40, tint = 'dark', style, className, children, ...rest }) => {
   const bg = tint === 'light' ? 'rgba(255, 255, 255, 0.65)' : 'rgba(15, 23, 42, 0.65)';
   return (
     <View
+      className={className as never}
       style={[
         {
           backgroundColor: bg,
@@ -517,6 +542,7 @@ export const BlurView: React.FC<{
         } as never,
         style as never,
       ]}
+      {...rest}
     >
       {children}
     </View>
@@ -527,15 +553,52 @@ export const Image: React.FC<Record<string, unknown>> = ({
   contentFit,
   resizeMode,
   source,
+  placeholder,
+  transition: _transition,
+  className,
+  style,
   ...rest
 }) => {
-  const resolvedSource = typeof source === 'string' ? { uri: source } : source;
+  let uri = '';
+  if (typeof source === 'string') {
+    uri = source;
+  } else if (Array.isArray(source) && source[0] && typeof source[0] === 'object') {
+    uri = String((source[0] as Record<string, unknown>).uri ?? '');
+  } else if (source && typeof source === 'object') {
+    uri = String((source as Record<string, unknown>).uri ?? '');
+  }
+  const placeholderBg =
+    placeholder && typeof placeholder === 'object' && 'color' in placeholder
+      ? String((placeholder as Record<string, unknown>).color ?? 'transparent')
+      : undefined;
+  const fit = String(contentFit ?? resizeMode ?? 'cover') as React.CSSProperties['objectFit'];
+
   return (
-    <RNImage
-      source={resolvedSource as never}
-      resizeMode={(contentFit ?? resizeMode ?? 'cover') as never}
+    <View
+      className={className as never}
+      style={[
+        {
+          overflow: 'hidden',
+          ...(placeholderBg ? { backgroundColor: placeholderBg } : {}),
+        } as never,
+        style as never,
+      ]}
       {...(rest as Record<string, unknown>)}
-    />
+    >
+      {uri ? (
+        <img
+          src={uri}
+          alt=""
+          draggable={false}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: fit,
+            display: 'block',
+          }}
+        />
+      ) : null}
+    </View>
   );
 };
 
@@ -730,7 +793,9 @@ export const Easing = {
 };
 
 export function createAnimatedComponent<P extends object>(Component: React.ComponentType<P>) {
-  return Component;
+  return withNativeWind(
+    Component as unknown as React.ComponentType<Record<string, unknown>>
+  ) as unknown as React.ComponentType<P>;
 }
 
 export const Animated = {
@@ -755,10 +820,15 @@ export const Animated = {
 };
 
 // React Native Gesture Handler Shims
-export const GestureHandlerRootView: React.FC<{ children?: React.ReactNode; style?: unknown }> = ({
-  children,
-  style,
-}) => <View style={[{ flex: 1 }, style as never]}>{children}</View>;
+export const GestureHandlerRootView: React.FC<{
+  children?: React.ReactNode;
+  style?: unknown;
+  className?: string;
+}> = ({ children, style, className, ...rest }) => (
+  <View className={className as never} style={[{ flex: 1 }, style as never]} {...rest}>
+    {children}
+  </View>
+);
 
 export const ScrollView = RNScrollView;
 export const FlatList = RNFlatList;

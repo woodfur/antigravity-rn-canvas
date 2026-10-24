@@ -36,13 +36,14 @@ import type { PatchPayload, ReorderPayload } from '../server/astEngine';
 const DEFAULT_WIDTH = 393;
 const DEFAULT_HEIGHT = 852;
 const ARTBOARD_GAP = 130;
+const ARTBOARD_ROW_GAP = 140;
 const INITIAL_OFFSET_X = 80;
 const INITIAL_OFFSET_Y = 70;
-const MIN_ZOOM = 0.25;
-const MAX_ZOOM = 1.75;
+const MIN_ZOOM = 0.08;
+const MAX_ZOOM = 2.0;
 
 function clampZoom(z: number): number {
-  return Number(Math.min(Math.max(z, MIN_ZOOM), MAX_ZOOM).toFixed(3));
+  return Math.min(Math.max(z, MIN_ZOOM), MAX_ZOOM);
 }
 
 function snapToDevicePixel(v: number): number {
@@ -52,10 +53,16 @@ function snapToDevicePixel(v: number): number {
 
 function buildDefaultLayout(screens: ScreenMetadata[]): ArtboardLayoutMap {
   const map: ArtboardLayoutMap = {};
+  const cols =
+    screens.length <= 5
+      ? Math.max(1, screens.length)
+      : Math.min(7, Math.ceil(Math.sqrt(screens.length * 1.6)));
   screens.forEach((screen, idx) => {
+    const col = idx % cols;
+    const row = Math.floor(idx / cols);
     map[screen.id] = {
-      x: INITIAL_OFFSET_X + idx * (DEFAULT_WIDTH + ARTBOARD_GAP),
-      y: INITIAL_OFFSET_Y,
+      x: INITIAL_OFFSET_X + col * (DEFAULT_WIDTH + ARTBOARD_GAP),
+      y: INITIAL_OFFSET_Y + row * (DEFAULT_HEIGHT + ARTBOARD_ROW_GAP),
       width: DEFAULT_WIDTH,
       height: DEFAULT_HEIGHT,
     };
@@ -134,18 +141,42 @@ export const CanvasApp: React.FC = () => {
 
   const canvasViewportRef = useRef<HTMLDivElement | null>(null);
   const worldContainerRef = useRef<HTMLDivElement | null>(null);
+  const zoomLabelRef = useRef<HTMLSpanElement | null>(null);
   const cameraTimerRef = useRef<number | null>(null);
   const panSyncTimerRef = useRef<number | null>(null);
+  const hasInitialFitRef = useRef<boolean>(false);
 
   // Refs for synchronous access inside non-passive native wheel/gesture listeners
   const zoomRef = useRef<number>(zoom);
   const panRef = useRef<{ x: number; y: number }>(pan);
   useEffect(() => {
     zoomRef.current = zoom;
+    if (zoomLabelRef.current) {
+      zoomLabelRef.current.textContent = `${Math.round(zoom * 100)}%`;
+    }
   }, [zoom]);
   useEffect(() => {
     panRef.current = pan;
   }, [pan]);
+
+  const scheduleCameraStateSync = useCallback((commitImmediately = false) => {
+    if (panSyncTimerRef.current) {
+      window.clearTimeout(panSyncTimerRef.current);
+      panSyncTimerRef.current = null;
+    }
+    if (commitImmediately) {
+      setIsCameraAnimating(false);
+      setZoom(zoomRef.current);
+      setPan(panRef.current);
+    } else {
+      panSyncTimerRef.current = window.setTimeout(() => {
+        panSyncTimerRef.current = null;
+        setIsCameraAnimating(false);
+        setZoom(zoomRef.current);
+        setPan(panRef.current);
+      }, 140);
+    }
+  }, []);
 
   const applyDirectPanTransform = useCallback(
     (rawX: number, rawY: number, commitImmediately = false) => {
@@ -161,23 +192,9 @@ export const CanvasApp: React.FC = () => {
         worldEl.style.transform = `translate3d(${nextPan.x}px, ${nextPan.y}px, 0) scale(${zoomRef.current})`;
       }
 
-      if (panSyncTimerRef.current) {
-        window.clearTimeout(panSyncTimerRef.current);
-        panSyncTimerRef.current = null;
-      }
-
-      if (commitImmediately) {
-        setIsCameraAnimating(false);
-        setPan(nextPan);
-      } else {
-        panSyncTimerRef.current = window.setTimeout(() => {
-          panSyncTimerRef.current = null;
-          setIsCameraAnimating(false);
-          setPan(panRef.current);
-        }, 120);
-      }
+      scheduleCameraStateSync(commitImmediately);
     },
-    []
+    [scheduleCameraStateSync]
   );
 
   const triggerCameraTransition = useCallback(() => {
@@ -231,7 +248,34 @@ export const CanvasApp: React.FC = () => {
         setLayout((prev) => {
           const base = buildDefaultLayout(sorted);
           const saved = layoutJson.ok && layoutJson.layout ? layoutJson.layout : {};
-          return { ...base, ...saved, ...prev };
+          const merged = { ...base, ...saved, ...prev };
+          if (!hasInitialFitRef.current && sorted.length > 0 && canvasViewportRef.current) {
+            hasInitialFitRef.current = true;
+            const rect = canvasViewportRef.current.getBoundingClientRect();
+            const positions = Object.values(merged);
+            if (positions.length > 0 && rect.width > 0 && rect.height > 0) {
+              const minX = Math.min(...positions.map((p) => p.x));
+              const minY = Math.min(...positions.map((p) => p.y));
+              const maxX = Math.max(...positions.map((p) => p.x + p.width));
+              const maxY = Math.max(...positions.map((p) => p.y + p.height + 50));
+              const contentWidth = maxX - minX + 140;
+              const contentHeight = maxY - minY + 140;
+              const nextZoom = clampZoom(
+                Math.min(rect.width / contentWidth, rect.height / contentHeight, 0.85)
+              );
+              const centerX = (minX + maxX) / 2;
+              const centerY = (minY + maxY) / 2;
+              const nextPan = {
+                x: Math.round(rect.width / 2 - centerX * nextZoom),
+                y: Math.round(rect.height / 2 - centerY * nextZoom),
+              };
+              zoomRef.current = nextZoom;
+              panRef.current = nextPan;
+              setZoom(nextZoom);
+              setPan(nextPan);
+            }
+          }
+          return merged;
         });
       }
     } catch (err) {
@@ -496,25 +540,27 @@ export const CanvasApp: React.FC = () => {
       if (nextZoom === prevZoom) return;
 
       // Pin the world coordinate directly under the user's cursor during two-finger pinch
+      // Keep full floating-point precision during active zoom gesture so (cursorX - worldX * nextZoom) never oscillates
       const cursorX = clientX - rect.left;
       const cursorY = clientY - rect.top;
       const worldX = (cursorX - prevPan.x) / prevZoom;
       const worldY = (cursorY - prevPan.y) / prevZoom;
 
       const nextPan = {
-        x: snapToDevicePixel(cursorX - worldX * nextZoom),
-        y: snapToDevicePixel(cursorY - worldY * nextZoom),
+        x: cursorX - worldX * nextZoom,
+        y: cursorY - worldY * nextZoom,
       };
 
-      setIsCameraAnimating(false);
       zoomRef.current = nextZoom;
       panRef.current = nextPan;
       if (worldContainerRef.current) {
         worldContainerRef.current.style.transition = 'none';
         worldContainerRef.current.style.transform = `translate3d(${nextPan.x}px, ${nextPan.y}px, 0) scale(${nextZoom})`;
       }
-      setZoom(nextZoom);
-      setPan(nextPan);
+      if (zoomLabelRef.current) {
+        zoomLabelRef.current.textContent = `${Math.round(nextZoom * 100)}%`;
+      }
+      scheduleCameraStateSync(false);
     };
 
     // 1. Non-passive wheel listener on the canvas viewport for 0ms pan & focal pinch-zoom
@@ -579,7 +625,7 @@ export const CanvasApp: React.FC = () => {
       document.removeEventListener('gesturechange', handleGestureChange);
       document.removeEventListener('gestureend', handleGestureEnd);
     };
-  }, [applyDirectPanTransform]);
+  }, [applyDirectPanTransform, scheduleCameraStateSync]);
 
   // Center viewport on a specific screen artboard using Emil Kowalski ease-out-expo camera physics
   const focusOnScreen = useCallback(
@@ -604,48 +650,58 @@ export const CanvasApp: React.FC = () => {
   );
 
   // Fit all screens in viewport
+  const fitCameraToLayout = useCallback(
+    (targetLayout: ArtboardLayoutMap) => {
+      const viewport = canvasViewportRef.current;
+      if (!viewport) return;
+      const rect = viewport.getBoundingClientRect();
+
+      const positions = Object.values(targetLayout);
+      if (positions.length === 0) return;
+
+      const minX = Math.min(...positions.map((p) => p.x));
+      const minY = Math.min(...positions.map((p) => p.y));
+      const maxX = Math.max(...positions.map((p) => p.x + p.width));
+      const maxY = Math.max(...positions.map((p) => p.y + p.height + 50));
+
+      const contentWidth = maxX - minX + 140;
+      const contentHeight = maxY - minY + 140;
+
+      const scaleX = rect.width / contentWidth;
+      const scaleY = rect.height / contentHeight;
+      const nextZoom = clampZoom(Math.min(scaleX, scaleY, 1.0));
+
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      const nextPan = {
+        x: Math.round(rect.width / 2 - centerX * nextZoom),
+        y: Math.round(rect.height / 2 - centerY * nextZoom),
+      };
+
+      triggerCameraTransition();
+      zoomRef.current = nextZoom;
+      panRef.current = nextPan;
+      setZoom(nextZoom);
+      setPan(nextPan);
+    },
+    [triggerCameraTransition]
+  );
+
   const handleFitAllScreens = useCallback(() => {
-    const viewport = canvasViewportRef.current;
-    if (!viewport || screens.length === 0) return;
-    const rect = viewport.getBoundingClientRect();
+    fitCameraToLayout(layout);
+  }, [fitCameraToLayout, layout]);
 
-    const positions = Object.values(layout);
-    if (positions.length === 0) return;
-
-    const minX = Math.min(...positions.map((p) => p.x));
-    const minY = Math.min(...positions.map((p) => p.y));
-    const maxX = Math.max(...positions.map((p) => p.x + p.width));
-    const maxY = Math.max(...positions.map((p) => p.y + p.height + 50));
-
-    const contentWidth = maxX - minX + 140;
-    const contentHeight = maxY - minY + 140;
-
-    const scaleX = rect.width / contentWidth;
-    const scaleY = rect.height / contentHeight;
-    const nextZoom = Number(Math.min(Math.max(Math.min(scaleX, scaleY), 0.28), 1.0).toFixed(2));
-
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-
-    triggerCameraTransition();
-    setZoom(nextZoom);
-    setPan({
-      x: Math.round(rect.width / 2 - centerX * nextZoom),
-      y: Math.round(rect.height / 2 - centerY * nextZoom),
-    });
-  }, [layout, screens.length, triggerCameraTransition]);
-
-  // Reset layout to clean horizontal grid
+  // Reset layout to clean multi-row grid and fit in viewport
   const handleResetGridLayout = useCallback(() => {
     const reset = buildDefaultLayout(screens);
-    triggerCameraTransition();
     setLayout(reset);
+    fitCameraToLayout(reset);
     void fetch('/api/layout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(reset),
     });
-  }, [screens, triggerCameraTransition]);
+  }, [screens, fitCameraToLayout]);
 
   // Move single artboard
   const handleMoveArtboard = useCallback((screenId: string, nextX: number, nextY: number) => {
@@ -962,6 +1018,7 @@ export const CanvasApp: React.FC = () => {
           </button>
 
           <span
+            ref={zoomLabelRef}
             className="tabular-nums"
             style={{
               minWidth: 46,
@@ -1355,8 +1412,6 @@ export const CanvasApp: React.FC = () => {
               left: 0,
               transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
               transformOrigin: '0 0',
-              willChange: 'transform',
-              backfaceVisibility: 'hidden',
               transition: isCameraAnimating
                 ? 'transform var(--duration-camera) var(--ease-out-expo)'
                 : 'none',

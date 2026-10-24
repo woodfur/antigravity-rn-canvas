@@ -41,7 +41,10 @@ import RNDefault, {
   ToastAndroid,
   PlatformColor,
   requireNativeComponent,
+  Dimensions,
+  useWindowDimensions,
 } from '../src/runtime/reactNativeShim';
+import { resolveTailwindClassNameToStyle } from '../src/runtime/nativewindShim';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_ROOT = path.resolve(__dirname, '..');
@@ -504,5 +507,26 @@ describe('Antigravity React Native Visual Canvas — AST Engine', () => {
     expect(defaultValUndefined.isLoading).toBe(false);
     expect((defaultValUndefined.user as Record<string, unknown>).name).toBe('Alex Morgan');
     expect(typeof SAFE_CHAINABLE_PROXY).toBe('function');
+
+    // 9. Verify NativeWind className -> style compiler & pinned 393x852 mobile Dimensions
+    expect(Dimensions.get('window').width).toBe(393);
+    expect(Dimensions.get('window').height).toBe(852);
+    expect(useWindowDimensions().width).toBe(393);
+
+    const twStyle = resolveTailwindClassNameToStyle(
+      'flex-row items-center justify-between p-4 rounded-2xl bg-surface-container-high text-title-sm font-headline text-primary bg-primary/10 w-32 h-32'
+    );
+    expect(twStyle).toBeTruthy();
+    expect(twStyle?.flexDirection).toBe('row');
+    expect(twStyle?.alignItems).toBe('center');
+    expect(twStyle?.justifyContent).toBe('space-between');
+    expect(twStyle?.padding).toBe(16);
+    expect(twStyle?.borderRadius).toBe(24);
+    expect(twStyle?.fontSize).toBe(14);
+    expect(twStyle?.fontWeight).toBe('700');
+    expect(twStyle?.color).toBe('#0F3460');
+    expect(twStyle?.backgroundColor).toBe('rgba(15, 52, 96, 0.1)');
+    expect(twStyle?.width).toBe(128);
+    expect(twStyle?.height).toBe(128);
   });
 });
