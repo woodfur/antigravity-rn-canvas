@@ -1,6 +1,6 @@
 {
   "name": "zelune",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "private": false,
   "license": "MIT",
   "type": "module",
@@ -59,14 +59,12 @@
     "@babel/parser": "^7.25.0",
     "@babel/traverse": "^7.25.0",
     "@babel/types": "^7.25.0",
-    "@modelcontextprotocol/sdk": "^1.0.1",
-    "@vitejs/plugin-react": "^4.3.2",
+    "@vitejs/plugin-react": "^4.7.0",
     "lucide-react": "^0.454.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-native-web": "^0.19.12",
-    "tsx": "^4.19.1",
-    "vite": "^5.4.8"
+    "vite": "6.4.4"
   },
   "devDependencies": {
     "@types/babel__generator": "^7.6.8",

@@ -1,14 +1,11 @@
 #!/usr/bin/env node
-import { spawn } from 'node:child_process';
 import fs from 'node:fs';
-import { createRequire } from 'node:module';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const defaultPackageRoot = path.resolve(__dirname, '..');
-const requireFromCli = createRequire(import.meta.url);
 
 const SCREEN_DIR_CANDIDATES = ['src/screens', 'screens', 'app', 'src/app'];
 const IGNORED_SCAN_DIRS = new Set([
@@ -364,25 +361,18 @@ Usage:
   }
 
   const resolvedMobileRoot = findMobileAppRoot(targetProject);
-  const env = {
-    ...process.env,
-    ANTIGRAVITY_WORKSPACE_ROOT: targetProject,
-    ANTIGRAVITY_TARGET_PROJECT: resolvedMobileRoot,
-  };
+  process.env.ANTIGRAVITY_WORKSPACE_ROOT = targetProject;
+  process.env.ANTIGRAVITY_TARGET_PROJECT = resolvedMobileRoot;
 
   if (isMcpMode) {
-    const mcpServerPath = path.join(defaultPackageRoot, 'mcp/server.ts');
-    const child = spawn('npx', ['tsx', mcpServerPath], {
-      cwd: defaultPackageRoot,
-      env,
-      stdio: 'inherit',
-    });
-    child.on('exit', (code) => process.exit(code ?? 0));
+    const mcpBundleUrl = pathToFileURL(path.join(defaultPackageRoot, 'mcp/server.mjs')).href;
+    const { startMcpServer } = await import(mcpBundleUrl);
+    startMcpServer(resolvedMobileRoot);
     return;
   }
 
   const portFlagIdx = args.indexOf('--port');
-  let port;
+  let portNumber;
   if (portFlagIdx !== -1 && args[portFlagIdx + 1]) {
     const parsedPort = Number.parseInt(String(args[portFlagIdx + 1]), 10);
     if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
@@ -391,42 +381,32 @@ Usage:
       );
       process.exit(1);
     }
-    port = String(parsedPort);
+    portNumber = parsedPort;
   } else {
-    const resolvedPort = await findAvailablePort(5173);
-    port = String(resolvedPort);
+    portNumber = await findAvailablePort(5173);
   }
 
   const shouldOpenBrowser = !args.includes('--no-open');
-  const viteCliFlags = ['--host', '127.0.0.1', '--port', port];
-  if (shouldOpenBrowser) {
-    viteCliFlags.push('--open');
-  }
 
   console.log(`\n🚀 Zelune — React Native Visual Canvas & MCP`);
   console.log(`📂 Workspace Root: ${targetProject}`);
   if (resolvedMobileRoot !== targetProject) {
     console.log(`📱 Mobile App Dir: ${resolvedMobileRoot}`);
   }
-  console.log(`🌐 Studio URL:     http://127.0.0.1:${port}\n`);
+  console.log(`🌐 Studio Port:    127.0.0.1:${portNumber}\n`);
 
-  let child;
-  try {
-    const viteBinPath = requireFromCli.resolve('vite/bin/vite.js');
-    child = spawn(process.execPath, [viteBinPath, ...viteCliFlags], {
-      cwd: defaultPackageRoot,
-      env,
-      stdio: 'inherit',
-    });
-  } catch {
-    child = spawn('npx', ['vite', ...viteCliFlags], {
-      cwd: defaultPackageRoot,
-      env,
-      stdio: 'inherit',
-    });
-  }
-
-  child.on('exit', (code) => process.exit(code ?? 0));
+  const { createServer } = await import('vite');
+  const server = await createServer({
+    root: defaultPackageRoot,
+    configFile: path.join(defaultPackageRoot, 'vite.config.ts'),
+    server: {
+      host: '127.0.0.1',
+      port: portNumber,
+      open: shouldOpenBrowser,
+    },
+  });
+  await server.listen();
+  server.printUrls();
 }
 
 const isDirectExecution =

@@ -1,6 +1,6 @@
 import { parse } from '@babel/parser';
+import * as LucideIcons from 'lucide-react';
 import fs from 'node:fs';
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { Plugin } from 'vite';
 
@@ -279,16 +279,7 @@ export function viteReactNativeFallbackPlugin(
   const zeluneDemoScreensDir = path.resolve(zelunePackageRoot, 'src/screens');
 
   const knownShimExports = extractModuleNamedExports(mockNavShimPath);
-  const reqFromPlugin = createRequire(import.meta.url);
-  const lucideExportKeys = new Set<string>();
-  try {
-    const lucideMod = reqFromPlugin('lucide-react') as Record<string, unknown>;
-    for (const k of Object.keys(lucideMod)) {
-      lucideExportKeys.add(k);
-    }
-  } catch {
-    // Ignore if lucide-react cannot be eagerly inspected
-  }
+  const lucideExportKeys = new Set<string>(Object.keys(LucideIcons));
 
   const uniqueRoots = Array.from(
     new Set([path.resolve(targetProjectRoot), path.resolve(workspaceRoot)])

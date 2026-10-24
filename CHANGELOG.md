@@ -2,6 +2,15 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.6.1] - 2026-10-24
+
+### Security
+- **Supply-Chain & Socket.dev Security Remediation (`vite.config.ts`, `bin/cli.mjs`, `mcp/server.ts`, `mcp/server.mjs`, `plugins/viteReactNativeFallbackPlugin.ts`, `package.json`)**:
+  - **Static AST Tailwind Config Extraction (No `new Function` / `eval`)**: Replaced `new Function()` dynamic evaluation in `vite.config.ts` with pure `@babel/parser` AST inspection (`parseTailwindConfigSource`) and replaced manual `.env` file loops / `'SECRET'`-keyword heuristics with Vite's official `loadEnv` API, eliminating `Uses eval` and `AI-detected potential security risk` / `code anomaly` flags.
+  - **In-Process CLI & Zero `child_process` / `createRequire` (`bin/cli.mjs`, `plugins/viteReactNativeFallbackPlugin.ts`, `vite.config.ts`)**: Removed `node:child_process` (`spawn`) and `node:module` (`createRequire`) across the codebase by launching Vite programmatically via `createServer`, running the MCP server in-process (`mcp/server.mjs`), and resolving package paths with native `import.meta.resolve`.
+  - **Zero-Dependency Native Stdio MCP Server & Dependency Tree Pruning (`mcp/server.ts`, `package.json`)**: Replaced `@modelcontextprotocol/sdk` and `tsx` in runtime `dependencies` with a native Node `node:readline` JSON-RPC 2.0 MCP implementation compiled to unminified ESM (`mcp/server.mjs`), pruning **93+ transitive npm packages** (`express`, `hono`, `ajv`, `cross-spawn`, `require-from-string`, etc.).
+  - **Vite 6 & `esbuild` CVE Upgrade (`package.json`)**: Upgraded `vite` to `6.4.4` (with `esbuild@0.25.12`) and `@vitejs/plugin-react` to `^4.7.0`, resolving High and Medium CVEs in Vite 5 and `esbuild <= 0.24.2`.
+
 ## [1.6.0] - 2026-10-24
 
 ### Added

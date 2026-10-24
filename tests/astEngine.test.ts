@@ -25,6 +25,8 @@ import {
   verifyApiRequestSecurity,
 } from '../src/server/apiMiddleware';
 import { initProject, findAvailablePort } from '../bin/cli.mjs';
+import { handleMcpJsonRpcRequest, MCP_TOOLS } from '../mcp/server';
+import { parseTailwindConfigSource } from '../vite.config';
 import { viteVirtualScreensPlugin } from '../plugins/viteVirtualScreensPlugin';
 import { viteReactNativeFallbackPlugin } from '../plugins/viteReactNativeFallbackPlugin';
 import DefaultShim, {
@@ -731,5 +733,90 @@ describe('Antigravity React Native Visual Canvas — AST Engine', () => {
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+
+  it('statically extracts Tailwind theme and theme.extend via AST without eval/new Function', () => {
+    const tsConfigSource = `
+      import type { Config } from 'tailwindcss';
+      const brandPalette = {
+        primary: '#0F3460',
+        accent: '#10B981',
+      } as const;
+      const config: Config = {
+        content: ['./app/**/*.{ts,tsx}'],
+        theme: {
+          fontFamily: {
+            sans: ['PlusJakartaSans', 'sans-serif'],
+          },
+          extend: {
+            colors: {
+              ...brandPalette,
+              surface: {
+                DEFAULT: '#FFFFFF',
+                high: '#F3F4F6',
+              },
+            },
+            borderRadius: {
+              card: 20,
+            },
+          },
+        },
+      } satisfies Config;
+      export default config;
+    `;
+
+    const theme = parseTailwindConfigSource(tsConfigSource);
+    expect(theme.fontFamily).toEqual({ sans: ['PlusJakartaSans', 'sans-serif'] });
+    expect(theme.colors).toEqual({
+      primary: '#0F3460',
+      accent: '#10B981',
+      surface: {
+        DEFAULT: '#FFFFFF',
+        high: '#F3F4F6',
+      },
+    });
+    expect(theme.borderRadius).toEqual({ card: 20 });
+  });
+
+  it('handles JSON-RPC 2.0 MCP initialize, tools/list, and tools/call with zero external SDK dependencies', async () => {
+    const initRes = await handleMcpJsonRpcRequest({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: { protocolVersion: '2024-11-05' },
+    });
+    expect(initRes?.id).toBe(1);
+    expect((initRes?.result as Record<string, unknown>)?.protocolVersion).toBe('2024-11-05');
+
+    const notifRes = await handleMcpJsonRpcRequest({
+      jsonrpc: '2.0',
+      method: 'notifications/initialized',
+    });
+    expect(notifRes).toBeNull();
+
+    const listRes = await handleMcpJsonRpcRequest({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/list',
+    });
+    const tools = (listRes?.result as { tools: typeof MCP_TOOLS })?.tools;
+    expect(Array.isArray(tools)).toBe(true);
+    expect(tools.length).toBe(7);
+
+    const callRes = await handleMcpJsonRpcRequest(
+      {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: { name: 'list_canvas_screens', arguments: {} },
+      },
+      WORKSPACE_ROOT
+    );
+    const content = (callRes?.result as { content: Array<{ type: string; text: string }> })
+      ?.content;
+    expect(content?.[0]?.type).toBe('text');
+    const parsedScreens = JSON.parse(content[0].text);
+    expect(Array.isArray(parsedScreens)).toBe(true);
+    expect(parsedScreens.length).toBeGreaterThanOrEqual(5);
   });
 });

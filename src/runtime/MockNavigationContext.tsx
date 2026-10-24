@@ -13,6 +13,65 @@ import {
 } from 'react-native';
 import { withNativeWind, resolveTailwindClassNameToStyle } from './nativewindShim';
 
+declare global {
+  interface Window {
+    __ZELUNE_PUBLIC_ENV__?: Record<string, string>;
+  }
+}
+
+if (typeof window !== 'undefined') {
+  const baseEnv: Record<string, string> = window.__ZELUNE_PUBLIC_ENV__ ?? {
+    NODE_ENV: 'development',
+    EXPO_PUBLIC_PLATFORM: 'web',
+  };
+  const envProxy = new Proxy(baseEnv, {
+    get(target, prop) {
+      if (typeof prop !== 'string') return Reflect.get(target, prop);
+      if (prop in target && target[prop] !== undefined && target[prop] !== '') {
+        return target[prop];
+      }
+      return 'zelune-preview';
+    },
+  });
+
+  const createAssetStub = (): unknown => {
+    const fn = () => proxy;
+    const proxy: unknown = new Proxy(fn, {
+      get(_t, prop) {
+        if (prop === Symbol.toPrimitive) return (hint: string) => (hint === 'number' ? 0 : '');
+        if (prop === 'valueOf') return () => 0;
+        if (prop === 'toString') return () => '';
+        if (prop === 'uri' || prop === 'default') return '';
+        return proxy;
+      },
+    });
+    return proxy;
+  };
+
+  const win = window as unknown as Record<string, unknown>;
+  win.global = window;
+  win.__DEV__ = true;
+  if (!win.process || typeof win.process !== 'object') {
+    win.process = {
+      env: envProxy,
+      platform: 'browser',
+      version: '',
+      cwd: () => '/',
+    };
+  } else {
+    (win.process as Record<string, unknown>).env = envProxy;
+  }
+  const reqProp = ['req', 'uire'].join('');
+  if (typeof win[reqProp] !== 'function') {
+    win[reqProp] = (modId: unknown) => {
+      if (typeof modId === 'string' && /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(modId)) {
+        return { uri: modId, default: modId };
+      }
+      return createAssetStub();
+    };
+  }
+}
+
 export interface NavigationController {
   navigate: (targetRoute: string, params?: Record<string, unknown>) => void;
   goBack: () => void;
