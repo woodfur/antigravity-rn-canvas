@@ -26,8 +26,14 @@ import {
 } from '../src/server/apiMiddleware';
 import { initProject, findAvailablePort } from '../bin/cli.mjs';
 import { handleMcpJsonRpcRequest, MCP_TOOLS } from '../mcp/server';
+import { parse as babelParse } from '@babel/parser';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { parseTailwindConfigSource } from '../src/server/tailwindThemeLoader';
 import { compileModuleForBrowser } from '../src/server/tsxBrowserCompiler';
+import {
+  buildUniversalStubModule,
+  buildLucideShimModule,
+} from '../src/server/studioHttpServer';
 import { viteVirtualScreensPlugin } from '../plugins/viteVirtualScreensPlugin';
 import { viteReactNativeFallbackPlugin } from '../plugins/viteReactNativeFallbackPlugin';
 import DefaultShim, {
@@ -836,6 +842,8 @@ describe('Antigravity React Native Visual Canvas — AST Engine', () => {
       'src/runtime/MockNavigationContext.tsx',
       'src/server/apiMiddleware.ts',
       'src/server/astEngine.ts',
+      'src/server/tsxBrowserCompiler.ts',
+      'src/server/studioHttpServer.ts',
       'plugins/viteReactNativeFallbackPlugin.ts',
       'index.html',
     ];
@@ -845,15 +853,34 @@ describe('Antigravity React Native Visual Canvas — AST Engine', () => {
       expect(src).not.toMatch(/https?:\/\//i);
     }
 
-    // Verify standalone TSX-to-Browser-ESM compiler transpiles screens & strips TS without Vite/esbuild
+    // Verify standalone TSX-to-Browser-ESM compiler transpiles all 5 screens into pure JS & preserves nested JSX children
+    const screenFiles = [
+      'src/screens/LoginScreen.tsx',
+      'src/screens/HomeScreen.tsx',
+      'src/screens/ProductDetailScreen.tsx',
+      'src/screens/CheckoutScreen.tsx',
+      'src/screens/ProfileScreen.tsx',
+    ];
+    for (const screenRel of screenFiles) {
+      const compiled = compileModuleForBrowser({
+        filePath: path.join(WORKSPACE_ROOT, screenRel),
+        targetProjectRoot: WORKSPACE_ROOT,
+        workspaceRoot: WORKSPACE_ROOT,
+      });
+      expect(compiled).toContain('__zeluneReact.createElement');
+      expect(compiled).toContain('data-agy-ast-path');
+      expect(compiled).toContain('/@zelune/shim/react-native.js');
+      // Must parse as 100% pure browser ES module with ZERO TypeScript or JSX plugins enabled
+      expect(() => babelParse(compiled, { sourceType: 'module', plugins: [] })).not.toThrow();
+    }
+
     const compiledHome = compileModuleForBrowser({
       filePath: path.join(WORKSPACE_ROOT, 'src/screens/HomeScreen.tsx'),
       targetProjectRoot: WORKSPACE_ROOT,
       workspaceRoot: WORKSPACE_ROOT,
     });
-    expect(compiledHome).toContain('React.createElement');
-    expect(compiledHome).toContain('data-agy-ast-path');
-    expect(compiledHome).toContain('/@zelune/shim/react-native.js');
+    expect(compiledHome).toContain('Chronos Spatial');
+    expect(compiledHome).toContain('Inspect Spec Sheet');
 
     // Verify runtime dependencies in package.json contain zero install-script or shell-access packages
     const pkgJson = JSON.parse(
@@ -864,5 +891,130 @@ describe('Antigravity React Native Visual Canvas — AST Engine', () => {
       '@babel/parser',
       '@babel/types',
     ]);
+  });
+
+  it('compiles external Expo/TypeScript screens with nested JSX, optional chaining, type import elision, require() assets, and namespace imports', async () => {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'zelune-compiler-test-'));
+    try {
+      fs.mkdirSync(path.join(tmpRoot, 'src/types'), { recursive: true });
+      fs.mkdirSync(path.join(tmpRoot, 'src/screens'), { recursive: true });
+      fs.mkdirSync(path.join(tmpRoot, 'assets'), { recursive: true });
+
+      fs.writeFileSync(path.join(tmpRoot, 'assets/hero.png'), 'PNGDATA', 'utf-8');
+      fs.writeFileSync(
+        path.join(tmpRoot, 'src/types/models.ts'),
+        [
+          'export interface Vehicle { id: string; title: string; }',
+          'export type Dealer = { name?: string };',
+          "export const CURRENCY = 'SLE';",
+        ].join('\n'),
+        'utf-8'
+      );
+      fs.writeFileSync(
+        path.join(tmpRoot, 'src/types/index.ts'),
+        [
+          "export { Vehicle, Dealer, CURRENCY } from './models';",
+          "export type * from './models';",
+        ].join('\n'),
+        'utf-8'
+      );
+      fs.writeFileSync(
+        path.join(tmpRoot, 'src/screens/MarketplaceScreen.tsx'),
+        [
+          "import { View, Text, TouchableOpacity, Image, ScrollView } from 'react-native';",
+          "import * as Haptics from 'expo-haptics';",
+          "import * as Icons from 'lucide-react-native';",
+          "import { Vehicle, Dealer, CURRENCY } from '../types';",
+          '',
+          'class PriceFormatter {',
+          "  constructor(private readonly prefix: string = 'Le ') {}",
+          '  format(this: PriceFormatter, amount: number): string {',
+          '    return `${this.prefix}${amount}`;',
+          '  }',
+          '}',
+          '',
+          'export default function MarketplaceScreen({ dealer, onSelect }: { dealer?: Dealer; onSelect?: (id: string) => void }) {',
+          '  const items: Vehicle[] = [{ id: "v1", title: "Land Cruiser" }];',
+          '  const dealerLabel = dealer?.name?.toUpperCase() ?? "Verified Seller";',
+          '  const formatter = new PriceFormatter();',
+          '  return (',
+          '    <ScrollView>',
+          '      <View className="p-4">',
+          '        <Image source={require("../../assets/hero.png")} style={{ width: 120, height: 80 }} />',
+          '        <Icons.Car size={20} />',
+          '        <Text>{dealerLabel}</Text>',
+          '        <Text>{formatter.format(2500)} {CURRENCY}</Text>',
+          '        <TouchableOpacity onPress={() => { Haptics.selectionAsync(); onSelect?.(items[0].id); }}>',
+          '          <Text>Explore Inventory</Text>',
+          '        </TouchableOpacity>',
+          '      </View>',
+          '    </ScrollView>',
+          '  );',
+          '}',
+        ].join('\n'),
+        'utf-8'
+      );
+
+      const compiledModels = compileModuleForBrowser({
+        filePath: path.join(tmpRoot, 'src/types/models.ts'),
+        targetProjectRoot: tmpRoot,
+        workspaceRoot: tmpRoot,
+      });
+      const compiledBarrel = compileModuleForBrowser({
+        filePath: path.join(tmpRoot, 'src/types/index.ts'),
+        targetProjectRoot: tmpRoot,
+        workspaceRoot: tmpRoot,
+      });
+      const compiledScreen = compileModuleForBrowser({
+        filePath: path.join(tmpRoot, 'src/screens/MarketplaceScreen.tsx'),
+        targetProjectRoot: tmpRoot,
+        workspaceRoot: tmpRoot,
+      });
+
+      // Pure JS syntax check on all 3 compiled modules
+      expect(() => babelParse(compiledModels, { sourceType: 'module', plugins: [] })).not.toThrow();
+      expect(() => babelParse(compiledBarrel, { sourceType: 'module', plugins: [] })).not.toThrow();
+      expect(() => babelParse(compiledScreen, { sourceType: 'module', plugins: [] })).not.toThrow();
+
+      // Type-only bindings Vehicle and Dealer must be elided from both barrel and screen
+      expect(compiledBarrel).not.toContain('Vehicle');
+      expect(compiledBarrel).not.toContain('Dealer');
+      expect(compiledBarrel).toContain('CURRENCY');
+      expect(compiledScreen).not.toContain('Vehicle');
+      expect(compiledScreen).not.toContain('Dealer');
+      expect(compiledScreen).toContain('CURRENCY');
+
+      // Optional chaining (`?.`), constructor parameter assignment, require() asset, namespace icon export, and nested children must all be preserved
+      expect(compiledScreen).toContain('dealer?.name?.toUpperCase()');
+      expect(compiledScreen).toContain('onSelect?.(');
+      expect(compiledScreen).toContain('this.prefix = prefix');
+      expect(compiledScreen).toContain('/@zelune/asset?file=');
+      expect(compiledScreen).toContain('exports=Car');
+      expect(compiledScreen).toContain('Explore Inventory');
+
+      // Stub and Lucide virtual module builders must also emit valid ES modules
+      const stubJs = buildUniversalStubModule(['selectionAsync', 'CustomNativeWidget']);
+      const lucideJs = buildLucideShimModule(['Car', 'NonExistentFutureIcon']);
+      expect(() => babelParse(stubJs, { sourceType: 'module', plugins: [] })).not.toThrow();
+      expect(() => babelParse(lucideJs, { sourceType: 'module', plugins: [] })).not.toThrow();
+      expect(stubJs).toContain('export const selectionAsync');
+      expect(stubJs).toContain('export const useNavigation');
+
+      // Verify React Native shim renders nested elements to HTML markup cleanly
+      const html = renderToStaticMarkup(
+        React.createElement(
+          RNDefault.ScrollView,
+          null,
+          React.createElement(
+            RNDefault.View,
+            { style: { padding: 16 } },
+            React.createElement(RNDefault.Text, null, 'Explore Inventory')
+          )
+        )
+      );
+      expect(html).toContain('Explore Inventory');
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
   });
 });

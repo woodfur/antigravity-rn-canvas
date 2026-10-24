@@ -18,9 +18,12 @@ import {
   Sliders,
   Sun,
   Moon,
-  Plus,
 } from 'lucide-react';
-import { SCREEN_COMPONENTS, SCREEN_ORDER } from '../screens';
+import {
+  SCREEN_COMPONENTS,
+  SCREEN_ORDER,
+  getDynamicScreenComponent,
+} from '../screens';
 import { ScreenArtboard } from './ScreenArtboard';
 import { FlowArrowsLayer } from './FlowArrowsLayer';
 import { InspectorPanel } from './InspectorPanel';
@@ -1080,32 +1083,6 @@ export const CanvasApp: React.FC = () => {
             <GitCommit size={14} style={{ flexShrink: 0 }} />
             <span className="zelune-reveal-label">Flow Graph</span>
           </button>
-
-          <button
-            type="button"
-            className="zelune-interactive"
-            onClick={() => {
-              setIsRightPanelOpen(true);
-              window.dispatchEvent(new CustomEvent('zelune:open-insert-palette'));
-            }}
-            title="Add Button, Section, Input, or Component to Active Screen"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 5,
-              padding: '6px 10px',
-              borderRadius: 7,
-              border: '1px solid rgba(56, 189, 248, 0.4)',
-              backgroundColor: 'rgba(56, 189, 248, 0.12)',
-              color: colorScheme === 'dark' ? '#38BDF8' : '#0284C7',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            <Plus size={14} style={{ flexShrink: 0 }} />
-            <span>Add Element</span>
-          </button>
         </div>
 
         {/* Right: Undo/Redo, Viewport Controls, Theme Toggle & Right Inspector Toggle */}
@@ -1601,7 +1578,9 @@ export const CanvasApp: React.FC = () => {
                 width: DEFAULT_WIDTH,
                 height: DEFAULT_HEIGHT,
               };
-              const ScreenComponent = SCREEN_COMPONENTS[screen.id];
+              const ScreenComponent =
+                SCREEN_COMPONENTS[screen.id] ??
+                getDynamicScreenComponent(screen.id, screen.filePath);
               const isSelectedScreen = selectedElement?.screenId === screen.id;
 
               return (

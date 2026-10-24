@@ -1568,12 +1568,35 @@ const safeContextFallbackBase: Record<string | symbol, unknown> = {
   notifications: STABLE_EMPTY_ARRAY,
   bookings: STABLE_EMPTY_ARRAY,
   listings: STABLE_EMPTY_ARRAY,
+  featuredListings: STABLE_EMPTY_ARRAY,
   vehicles: STABLE_EMPTY_ARRAY,
   cars: STABLE_EMPTY_ARRAY,
+  dealers: STABLE_EMPTY_ARRAY,
+  featuredDealers: STABLE_EMPTY_ARRAY,
+  categories: STABLE_EMPTY_ARRAY,
+  brands: STABLE_EMPTY_ARRAY,
+  makes: STABLE_EMPTY_ARRAY,
+  models: STABLE_EMPTY_ARRAY,
+  products: STABLE_EMPTY_ARRAY,
+  services: STABLE_EMPTY_ARRAY,
+  reviews: STABLE_EMPTY_ARRAY,
   orders: STABLE_EMPTY_ARRAY,
   transactions: STABLE_EMPTY_ARRAY,
   messages: STABLE_EMPTY_ARRAY,
   chats: STABLE_EMPTY_ARRAY,
+  accounts: STABLE_EMPTY_ARRAY,
+  wallets: STABLE_EMPTY_ARRAY,
+  loans: STABLE_EMPTY_ARRAY,
+  members: STABLE_EMPTY_ARRAY,
+  groups: STABLE_EMPTY_ARRAY,
+  contributions: STABLE_EMPTY_ARRAY,
+  addresses: STABLE_EMPTY_ARRAY,
+  cards: STABLE_EMPTY_ARRAY,
+  paymentMethods: STABLE_EMPTY_ARRAY,
+  filters: {},
+  filterState: {},
+  searchQuery: '',
+  selectedCategory: 'All',
   unreadCount: 0,
   count: 0,
   total: 0,
@@ -1589,6 +1612,14 @@ const safeContextFallbackBase: Record<string | symbol, unknown> = {
   updateProfile: async () => ({ error: null }),
   toggleTheme: () => undefined,
   setTheme: () => undefined,
+  setSearchQuery: () => undefined,
+  setFilters: () => undefined,
+  resetFilters: () => undefined,
+  addItem: () => undefined,
+  removeItem: () => undefined,
+  clearCart: () => undefined,
+  toggleFavorite: () => undefined,
+  isFavorite: () => false,
 };
 
 safeContextFallbackBase[Symbol.iterator] = function* () {
@@ -1598,6 +1629,36 @@ safeContextFallbackBase[Symbol.iterator] = function* () {
 
 export const SAFE_CONTEXT_FALLBACK: Record<string, unknown> =
   safeContextFallbackBase as Record<string, unknown>;
+
+if (typeof window !== 'undefined') {
+  const win = window as unknown as Record<string, unknown>;
+  const previewOrigin = window.location?.origin || 'zelune-preview';
+  win.global = window;
+  win.__DEV__ = true;
+  if (!win.process || typeof win.process !== 'object') {
+    win.process = {
+      env: {
+        NODE_ENV: 'development',
+        EXPO_PUBLIC_PLATFORM: 'web',
+        EXPO_PUBLIC_SUPABASE_URL: previewOrigin,
+        EXPO_PUBLIC_SUPABASE_ANON_KEY: 'zelune-preview-public-key',
+        EXPO_PUBLIC_API_URL: previewOrigin,
+        EXPO_PUBLIC_APP_URL: previewOrigin,
+      },
+      platform: 'browser',
+      version: '',
+      cwd: () => '/',
+    };
+  }
+  if (typeof win.require !== 'function') {
+    win.require = (modId: unknown) => {
+      if (typeof modId === 'string' && /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i.test(modId)) {
+        return { uri: modId, default: modId };
+      }
+      return SAFE_CHAINABLE_PROXY;
+    };
+  }
+}
 
 // Install unmounted user-context fallback on React.createContext & React.useContext
 // (runs after react-native-web has already initialized its internal VirtualizedListContext)

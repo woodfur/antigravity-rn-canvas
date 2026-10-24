@@ -1,5 +1,6 @@
 import React from 'react';
-import ReactDOM from 'react-dom/client';
+import * as ReactDOMBase from 'react-dom';
+import ReactDOMClient from 'react-dom/client';
 import * as LucideIcons from 'lucide-react';
 import * as ReactNativeShim from './runtime/reactNativeShim';
 import * as MockNavShim from './runtime/MockNavigationContext';
@@ -9,12 +10,14 @@ import './styles.css';
 if (typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__ZELUNE_RUNTIME__ = {
     React,
-    ReactDOM,
+    ReactDOM: { ...ReactDOMBase, ...ReactDOMClient },
     ReactNative: ReactNativeShim,
     MockNav: MockNavShim,
     LucideIcons,
   };
 }
+
+const ReactDOM = ReactDOMClient;
 
 class StudioRootErrorBoundary extends React.Component<
   { children: React.ReactNode },

@@ -1,1 +1,5 @@
-export { SCREEN_COMPONENTS, SCREEN_ORDER } from 'virtual:zelune-screens';
+export {
+  SCREEN_COMPONENTS,
+  SCREEN_ORDER,
+  getDynamicScreenComponent,
+} from 'virtual:zelune-screens';

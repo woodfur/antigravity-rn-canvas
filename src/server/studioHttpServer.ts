@@ -41,7 +41,17 @@ const MIME_TYPES: Record<string, string> = {
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
   '.gif': 'image/gif',
+  '.avif': 'image/avif',
+  '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
 };
 
 const REACT_EXPORTS = [
@@ -150,6 +160,242 @@ const REACT_NATIVE_EXPORTS = [
   'Settings',
 ];
 
+const DEFAULT_MOCK_NAV_EXPORTS = [
+  'MockNavigationProvider',
+  'useNavigation',
+  'useRoute',
+  'useFocusEffect',
+  'useIsFocused',
+  'useScrollToTop',
+  'NavigationContainer',
+  'CommonActions',
+  'StackActions',
+  'createNativeStackNavigator',
+  'createStackNavigator',
+  'createBottomTabNavigator',
+  'createDrawerNavigator',
+  'createMaterialTopTabNavigator',
+  'DefaultTheme',
+  'DarkTheme',
+  'ThemeProvider',
+  'useTheme',
+  'useNavigationContainerRef',
+  'useRouter',
+  'router',
+  'useLocalSearchParams',
+  'useGlobalSearchParams',
+  'usePathname',
+  'useSegments',
+  'useRootNavigationState',
+  'Link',
+  'Redirect',
+  'Stack',
+  'Tabs',
+  'Drawer',
+  'Slot',
+  'SplashScreen',
+  'SafeAreaProvider',
+  'SafeAreaView',
+  'useSafeAreaInsets',
+  'useSafeAreaFrame',
+  'SafeAreaInsetsContext',
+  'SafeAreaFrameContext',
+  'withSafeAreaInsets',
+  'initialWindowMetrics',
+  'StatusBar',
+  'createVectorIconComponent',
+  'Ionicons',
+  'Feather',
+  'MaterialIcons',
+  'MaterialCommunityIcons',
+  'FontAwesome',
+  'FontAwesome5',
+  'FontAwesome6',
+  'AntDesign',
+  'Entypo',
+  'EvilIcons',
+  'Foundation',
+  'Octicons',
+  'SimpleLineIcons',
+  'Zocial',
+  'Fontisto',
+  'createIconSet',
+  'createIconSetFromIcoMoon',
+  'createIconSetFromFontello',
+  'LinearGradient',
+  'BlurView',
+  'Image',
+  'ImageBackground',
+  'FlashList',
+  'Svg',
+  'Circle',
+  'Ellipse',
+  'G',
+  'SvgText',
+  'TSpan',
+  'TextPath',
+  'Path',
+  'Polygon',
+  'Polyline',
+  'Line',
+  'Rect',
+  'Use',
+  'SvgImage',
+  'Symbol',
+  'Defs',
+  'RadialGradient',
+  'Stop',
+  'ClipPath',
+  'Pattern',
+  'Mask',
+  'ForeignObject',
+  'SvgXml',
+  'SvgUri',
+  'FadeIn',
+  'FadeInDown',
+  'FadeInUp',
+  'FadeInLeft',
+  'FadeInRight',
+  'FadeOut',
+  'FadeOutDown',
+  'FadeOutUp',
+  'SlideInDown',
+  'SlideInUp',
+  'SlideInLeft',
+  'SlideInRight',
+  'SlideOutDown',
+  'SlideOutUp',
+  'SlideOutLeft',
+  'SlideOutRight',
+  'ZoomIn',
+  'ZoomOut',
+  'Layout',
+  'LinearTransition',
+  'SequencedTransition',
+  'FadingTransition',
+  'useSharedValue',
+  'useAnimatedStyle',
+  'useDerivedValue',
+  'useAnimatedProps',
+  'useAnimatedScrollHandler',
+  'useAnimatedRef',
+  'useAnimatedGestureHandler',
+  'withTiming',
+  'withSpring',
+  'withDelay',
+  'withSequence',
+  'withRepeat',
+  'cancelAnimation',
+  'runOnJS',
+  'runOnUI',
+  'interpolate',
+  'Extrapolation',
+  'Extrapolate',
+  'Easing',
+  'createAnimatedComponent',
+  'Animated',
+  'GestureHandlerRootView',
+  'ScrollView',
+  'FlatList',
+  'TouchableOpacity',
+  'TouchableHighlight',
+  'TouchableWithoutFeedback',
+  'Pressable',
+  'Swipeable',
+  'DrawerLayout',
+  'PanGestureHandler',
+  'TapGestureHandler',
+  'LongPressGestureHandler',
+  'GestureDetector',
+  'Gesture',
+  'State',
+  'Directions',
+  'ImpactFeedbackStyle',
+  'NotificationFeedbackType',
+  'impactAsync',
+  'notificationAsync',
+  'selectionAsync',
+  'Constants',
+  'useFonts',
+  'loadAsync',
+  'isLoaded',
+  'preventAutoHideAsync',
+  'hideAsync',
+  'AsyncStorage',
+  'getItemAsync',
+  'setItemAsync',
+  'deleteItemAsync',
+  'setStringAsync',
+  'getStringAsync',
+  'openURL',
+  'createURL',
+  'create',
+  'useStore',
+  'QueryClient',
+  'QueryClientProvider',
+  'useQueryClient',
+  'useQuery',
+  'useInfiniteQuery',
+  'useMutation',
+  'createSafeChainableProxy',
+  'SAFE_CHAINABLE_PROXY',
+  'z',
+  'string',
+  'number',
+  'boolean',
+  'object',
+  'array',
+  'union',
+  'literal',
+  'record',
+  'tuple',
+  'any',
+  'unknown',
+  'optional',
+  'nullable',
+  'coerce',
+  'zodResolver',
+  'yupResolver',
+  'scale',
+  'verticalScale',
+  'moderateScale',
+  'moderateVerticalScale',
+  's',
+  'vs',
+  'ms',
+  'mvs',
+  'RFValue',
+  'RFPercentage',
+  'widthPercentageToDP',
+  'heightPercentageToDP',
+  'wp',
+  'hp',
+  'clsx',
+  'cn',
+  'twMerge',
+  'styled',
+  'cssInterop',
+  'remapProps',
+  'tw',
+  'createTw',
+  'useForm',
+  'useFormContext',
+  'FormProvider',
+  'useWatch',
+  'useFieldArray',
+  'Controller',
+  'SAFE_CONTEXT_FALLBACK',
+  'createClient',
+];
+
+function safeRealpath(targetPath: string): string {
+  try {
+    return fs.realpathSync(targetPath);
+  } catch {
+    return path.resolve(targetPath);
+  }
+}
+
 function sendJson(res: http.ServerResponse, status: number, payload: unknown) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -165,7 +411,7 @@ function sendJs(res: http.ServerResponse, code: string) {
   res.end(code);
 }
 
-function buildReactShimModule(): string {
+export function buildReactShimModule(): string {
   const lines = [
     `const R = window.__ZELUNE_RUNTIME__.React;`,
     `export default R;`,
@@ -179,7 +425,7 @@ function buildReactShimModule(): string {
   return lines.join('\n');
 }
 
-function buildReactDomShimModule(): string {
+export function buildReactDomShimModule(): string {
   return [
     `const RD = window.__ZELUNE_RUNTIME__.ReactDOM;`,
     `export default RD;`,
@@ -190,7 +436,7 @@ function buildReactDomShimModule(): string {
   ].join('\n');
 }
 
-function buildReactNativeShimModule(): string {
+export function buildReactNativeShimModule(): string {
   const lines = [
     `const RN = window.__ZELUNE_RUNTIME__.ReactNative;`,
     `export default RN.default || RN;`,
@@ -201,7 +447,7 @@ function buildReactNativeShimModule(): string {
   return lines.join('\n');
 }
 
-function buildLucideShimModule(requestedNames: string[]): string {
+export function buildLucideShimModule(requestedNames: string[]): string {
   const lines = [
     `const L = window.__ZELUNE_RUNTIME__.LucideIcons || {};`,
     `const M = window.__ZELUNE_RUNTIME__.MockNav || {};`,
@@ -222,7 +468,7 @@ function buildLucideShimModule(requestedNames: string[]): string {
   return lines.join('\n');
 }
 
-function buildUniversalStubModule(requestedNames: string[]): string {
+export function buildUniversalStubModule(requestedNames: string[]): string {
   const lines = [
     `const React = window.__ZELUNE_RUNTIME__.React;`,
     `const RN = window.__ZELUNE_RUNTIME__.ReactNative;`,
@@ -265,7 +511,7 @@ function buildUniversalStubModule(requestedNames: string[]): string {
   ];
   const unique = Array.from(
     new Set(
-      requestedNames
+      [...DEFAULT_MOCK_NAV_EXPORTS, ...requestedNames]
         .map((s) => s.trim())
         .filter((s) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(s) && s !== 'default')
     )
@@ -314,17 +560,40 @@ export async function startStudioHttpServer(
 ): Promise<{ server: http.Server; port: number }> {
   const { packageRoot, targetProjectRoot, workspaceRoot } = options;
   const distDir = path.resolve(packageRoot, 'dist');
+  const activeProjectRoot = getActiveProjectRoot(targetProjectRoot);
   const allowedRoots = Array.from(
     new Set([
       path.resolve(packageRoot),
+      safeRealpath(packageRoot),
       path.resolve(targetProjectRoot),
+      safeRealpath(targetProjectRoot),
+      path.resolve(activeProjectRoot),
+      safeRealpath(activeProjectRoot),
       path.resolve(workspaceRoot),
+      safeRealpath(workspaceRoot),
     ])
   );
 
-  function isPathAllowed(candidatePath: string): boolean {
-    const resolved = path.resolve(candidatePath);
-    return allowedRoots.some((root) => resolved === root || resolved.startsWith(root + path.sep));
+  function resolveCandidateFileParam(rawParam: string): string | null {
+    const clean = rawParam.split('?')[0].trim();
+    if (!clean) return null;
+    const candidate = path.isAbsolute(clean)
+      ? path.resolve(clean)
+      : path.resolve(getActiveProjectRoot(targetProjectRoot), clean.replace(/^[/\\]+/, ''));
+    const lexicallyAllowed = allowedRoots.some(
+      (root) => candidate === root || candidate.startsWith(root + path.sep)
+    );
+    if (!lexicallyAllowed || !fs.existsSync(candidate)) {
+      return null;
+    }
+    const real = safeRealpath(candidate);
+    const canonicallyAllowed = allowedRoots.some(
+      (root) => real === root || real.startsWith(root + path.sep)
+    );
+    if (!canonicallyAllowed) {
+      return null;
+    }
+    return real;
   }
 
   const requestHandler = async (req: http.IncomingMessage, res: http.ServerResponse) => {
@@ -484,35 +753,37 @@ export async function startStudioHttpServer(
     // 3. Handle /@zelune/module?file=... on-the-fly TSX/TS/JSX compilation
     if (pathname === '/@zelune/module') {
       const fileParam = searchParams.get('file') ?? '';
-      if (!fileParam || !isPathAllowed(fileParam) || !fs.existsSync(fileParam)) {
-        res.statusCode = 404;
-        return res.end('// Module not found\nexport default {};\n');
+      const versionTag = searchParams.get('t') ?? undefined;
+      const resolvedFile = resolveCandidateFileParam(fileParam);
+      if (!resolvedFile) {
+        return sendJs(res, '// Module not found\nexport default {};\n');
       }
       try {
         const compiled = compileModuleForBrowser({
-          filePath: fileParam,
-          targetProjectRoot,
+          filePath: resolvedFile,
+          targetProjectRoot: getActiveProjectRoot(targetProjectRoot),
           workspaceRoot,
+          versionTag,
         });
         return sendJs(res, compiled);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        res.statusCode = 500;
-        return res.end(`throw new Error(${JSON.stringify(msg)});\n`);
+        return sendJs(res, `throw new Error(${JSON.stringify(msg)});\n`);
       }
     }
 
-    // 4. Handle /@zelune/asset?file=... local image/asset serving
+    // 4. Handle /@zelune/asset?file=... local image/font/media serving
     if (pathname === '/@zelune/asset') {
       const fileParam = searchParams.get('file') ?? '';
-      if (!fileParam || !isPathAllowed(fileParam) || !fs.existsSync(fileParam)) {
+      const resolvedAsset = resolveCandidateFileParam(fileParam);
+      if (!resolvedAsset) {
         res.statusCode = 404;
         return res.end('Not found');
       }
-      const ext = path.extname(fileParam).toLowerCase();
+      const ext = path.extname(resolvedAsset).toLowerCase();
       res.statusCode = 200;
       res.setHeader('Content-Type', MIME_TYPES[ext] ?? 'application/octet-stream');
-      return fs.createReadStream(fileParam).pipe(res);
+      return fs.createReadStream(resolvedAsset).pipe(res);
     }
 
     // 5. Serve pre-built dist/ Studio files
@@ -525,9 +796,9 @@ export async function startStudioHttpServer(
       const rawHtml = await fsp.readFile(indexHtmlPath, 'utf-8');
       const tailwindTheme = loadProjectTailwindTheme([targetProjectRoot, workspaceRoot]);
       const discoveredManifest = discoverScreenFilesSync(targetProjectRoot);
-      const runtimeScript = `<script>window.__ZELUNE_TAILWIND_THEME__ = ${JSON.stringify(
-        tailwindTheme
-      )}; window.__ZELUNE_SCREEN_MANIFEST__ = ${JSON.stringify(discoveredManifest)};</script>`;
+      const safeThemeJson = JSON.stringify(tailwindTheme).replace(/</g, '\\u003c');
+      const safeManifestJson = JSON.stringify(discoveredManifest).replace(/</g, '\\u003c');
+      const runtimeScript = `<script>window.__ZELUNE_STUDIO_SERVER__ = true; window.__ZELUNE_TAILWIND_THEME__ = ${safeThemeJson}; window.__ZELUNE_SCREEN_MANIFEST__ = ${safeManifestJson};</script>`;
       const injectedHtml = rawHtml.replace('<head>', `<head>\n    ${runtimeScript}`);
       res.statusCode = 200;
       res.setHeader('Content-Type', 'text/html; charset=utf-8');

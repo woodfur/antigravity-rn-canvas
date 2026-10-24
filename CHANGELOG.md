@@ -2,6 +2,18 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.6.5] - 2026-10-24
+
+### Fixed
+- **Standalone TSX Browser Compiler & Studio Runtime Screen-Loading Fixes (`src/server/tsxBrowserCompiler.ts`, `src/server/studioHttpServer.ts`, `src/runtime/MockNavigationContext.tsx`, `src/main.tsx`, `plugins/viteVirtualScreensPlugin.ts`, `src/screens/index.ts`, `src/canvas/CanvasApp.tsx`)**:
+  - **Preserved Nested JSX Children During Bottom-Up AST Transformation (`src/server/tsxBrowserCompiler.ts`)**: Fixed `convertJsxChildrenToExprs` dropping child `JSXElement` / `JSXFragment` nodes that had already been transformed bottom-up into `CallExpression`s, which caused screens in `v1.6.4` to render empty root containers.
+  - **Preserved Optional Chaining (`?.`) & Added Full TypeScript Import/Re-Export Elision (`src/server/tsxBrowserCompiler.ts`)**: Guarded `delete node.optional` so `OptionalMemberExpression` and `OptionalCallExpression` (`?.`) are never stripped; added `tsc`/`esbuild`-equivalent unused/type-only import and barrel re-export elision (`import { SomeInterface } from '../types'`), `export type *` stripping, `this: T` fake parameter stripping, and constructor `TSParameterProperty` lowering.
+  - **Static `require(...)` Asset/Module Rewriting & Safe Browser Globals (`src/server/tsxBrowserCompiler.ts`, `src/runtime/MockNavigationContext.tsx`)**: Transformed static `require('../assets/...')` calls into `/@zelune/asset?file=...` URIs (or hoisted ESM imports) and restored safe browser `window.process`, `window.__DEV__`, `window.global`, and `window.require` globals without `new Proxy` or external URL literals.
+  - **Universal Namespace Exports, Singleton Context Routing & Dynamic Screen Fallback (`src/server/studioHttpServer.ts`, `src/server/tsxBrowserCompiler.ts`, `src/main.tsx`, `plugins/viteVirtualScreensPlugin.ts`, `src/canvas/CanvasApp.tsx`)**: Exposed all `MockNavigationContext` exports on `/@zelune/shim/stub.js` by default for `import * as ...` namespace imports, routed local `MockNavigationContext`/`reactNativeShim` imports to the singleton `/@zelune/shim/*` modules, merged `react-dom` (`createPortal`, `flushSync`) into `window.__ZELUNE_RUNTIME__.ReactDOM`, made `/@zelune/module` symlink- and relative-path-aware, and added `getDynamicScreenComponent` fallback for newly added screens.
+
+### Changed
+- **Removed Top Bar `+ Add Element` Button (`src/canvas/CanvasApp.tsx`)**: Removed the `+ Add Element` button from the top Studio bar to keep the header clean and minimal while retaining the full Component Builder Palette inside the Right Inspector panel.
+
 ## [1.6.4] - 2026-10-24
 
 ### Security

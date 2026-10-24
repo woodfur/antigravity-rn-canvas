@@ -8,6 +8,9 @@ import { getJsxTagName } from './astEngine';
 const generate = (_generate as unknown as { default?: typeof _generate }).default ?? _generate;
 
 const ALLOWED_SCREEN_PREFIXES = ['src/screens/', 'screens/', 'app/', 'src/app/'];
+const ASSET_EXT_REGEX =
+  /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico|ttf|otf|woff2?|mp3|mp4|wav|m4a|webm|lottie|pdf|bin)$/i;
+
 const RESOLVABLE_EXTENSIONS = [
   '.web.tsx',
   '.web.ts',
@@ -17,9 +20,21 @@ const RESOLVABLE_EXTENSIONS = [
   '.ts',
   '.jsx',
   '.js',
+  '.native.tsx',
+  '.native.ts',
+  '.native.jsx',
+  '.native.js',
+  '.ios.tsx',
+  '.ios.ts',
+  '.android.tsx',
+  '.android.ts',
+  '.mjs',
+  '.cjs',
   '.json',
   '.css',
 ];
+
+const ZELUNE_JSX_REACT_IDENT = '__zeluneReact';
 
 function stripJsonCommentsAndTrailingCommas(input: string): string {
   const withoutComments = input.replace(
@@ -143,7 +158,8 @@ function convertJsxElementNameToExpr(
 }
 
 function convertJsxAttributesToExpr(
-  attributes: Array<t.JSXAttribute | t.JSXSpreadAttribute>
+  attributes: Array<t.JSXAttribute | t.JSXSpreadAttribute>,
+  onJsxSeen: () => void
 ): t.Expression {
   if (attributes.length === 0) {
     return t.nullLiteral();
@@ -171,7 +187,7 @@ function convertJsxAttributesToExpr(
         valExpr = attr.value.expression;
       }
     } else if (t.isJSXElement(attr.value) || t.isJSXFragment(attr.value)) {
-      valExpr = transformJsxNode(attr.value);
+      valExpr = transformJsxNode(attr.value, onJsxSeen);
     } else {
       valExpr = attr.value;
     }
@@ -181,10 +197,12 @@ function convertJsxAttributesToExpr(
 }
 
 function convertJsxChildrenToExprs(
-  children: t.JSXElement['children']
+  children: Array<t.Node>,
+  onJsxSeen: () => void
 ): Array<t.Expression | t.SpreadElement> {
   const out: Array<t.Expression | t.SpreadElement> = [];
   for (const child of children) {
+    if (!child) continue;
     if (t.isJSXText(child)) {
       const cleaned = cleanJsxText(child.value);
       if (cleaned !== null) {
@@ -197,28 +215,35 @@ function convertJsxChildrenToExprs(
     } else if (t.isJSXSpreadChild(child)) {
       out.push(child.expression);
     } else if (t.isJSXElement(child) || t.isJSXFragment(child)) {
-      out.push(transformJsxNode(child));
+      out.push(transformJsxNode(child, onJsxSeen));
+    } else if (t.isSpreadElement(child) || t.isExpression(child)) {
+      // Child JSXElement/JSXFragment already transformed bottom-up into CallExpression
+      out.push(child);
     }
   }
   return out;
 }
 
-function transformJsxNode(node: t.JSXElement | t.JSXFragment): t.CallExpression {
+function transformJsxNode(
+  node: t.JSXElement | t.JSXFragment,
+  onJsxSeen: () => void
+): t.CallExpression {
+  onJsxSeen();
   const createElMember = t.memberExpression(
-    t.identifier('React'),
+    t.identifier(ZELUNE_JSX_REACT_IDENT),
     t.identifier('createElement')
   );
   if (t.isJSXFragment(node)) {
     const fragMember = t.memberExpression(
-      t.identifier('React'),
+      t.identifier(ZELUNE_JSX_REACT_IDENT),
       t.identifier('Fragment')
     );
-    const children = convertJsxChildrenToExprs(node.children);
+    const children = convertJsxChildrenToExprs(node.children as unknown as t.Node[], onJsxSeen);
     return t.callExpression(createElMember, [fragMember, t.nullLiteral(), ...children]);
   }
   const tagExpr = convertJsxElementNameToExpr(node.openingElement.name);
-  const propsExpr = convertJsxAttributesToExpr(node.openingElement.attributes);
-  const children = convertJsxChildrenToExprs(node.children);
+  const propsExpr = convertJsxAttributesToExpr(node.openingElement.attributes, onJsxSeen);
+  const children = convertJsxChildrenToExprs(node.children as unknown as t.Node[], onJsxSeen);
   return t.callExpression(createElMember, [tagExpr, propsExpr, ...children]);
 }
 
@@ -245,8 +270,41 @@ function convertTsEnumToVar(enumNode: t.TSEnumDeclaration): t.VariableDeclaratio
   ]);
 }
 
+function isTsDeclarationOnlyNode(item: Record<string, unknown>): boolean {
+  const nodeType = item.type;
+  if (
+    nodeType === 'TSInterfaceDeclaration' ||
+    nodeType === 'TSTypeAliasDeclaration' ||
+    nodeType === 'TSDeclareFunction' ||
+    nodeType === 'TSDeclareMethod' ||
+    nodeType === 'TSModuleDeclaration' ||
+    nodeType === 'TSIndexSignature' ||
+    nodeType === 'TSAbstractMethodDefinition' ||
+    nodeType === 'TSAbstractPropertyDefinition' ||
+    nodeType === 'TSAbstractAccessorProperty'
+  ) {
+    return true;
+  }
+  if (
+    (nodeType === 'ClassMethod' ||
+      nodeType === 'ClassProperty' ||
+      nodeType === 'ClassPrivateProperty' ||
+      nodeType === 'AccessorProperty') &&
+    (item.abstract === true || item.declare === true)
+  ) {
+    return true;
+  }
+  if (nodeType === 'VariableDeclaration' && item.declare === true) {
+    return true;
+  }
+  if (nodeType === 'ClassDeclaration' && item.declare === true) {
+    return true;
+  }
+  return false;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function stripTypeScriptAndTransformJsxAst(node: any): any {
+export function stripTypeScriptAndTransformJsxAst(node: any, onJsxSeen: () => void = () => {}): any {
   if (!node || typeof node !== 'object') return node;
 
   if (Array.isArray(node)) {
@@ -254,32 +312,27 @@ function stripTypeScriptAndTransformJsxAst(node: any): any {
     for (let i = 0; i < node.length; i++) {
       const item = node[i];
       if (!item) continue;
-      if (
-        item.type === 'TSInterfaceDeclaration' ||
-        item.type === 'TSTypeAliasDeclaration' ||
-        item.type === 'TSDeclareFunction' ||
-        item.type === 'TSDeclareMethod' ||
-        item.type === 'TSModuleDeclaration' ||
-        item.type === 'TSIndexSignature'
-      ) {
+      if (isTsDeclarationOnlyNode(item)) {
         continue;
       }
       if (item.type === 'ImportDeclaration' && item.importKind === 'type') {
         continue;
       }
+      if (item.type === 'ExportAllDeclaration' && item.exportKind === 'type') {
+        continue;
+      }
       if (item.type === 'ExportNamedDeclaration') {
         if (item.exportKind === 'type') continue;
-        if (
-          item.declaration &&
-          (item.declaration.type === 'TSInterfaceDeclaration' ||
-            item.declaration.type === 'TSTypeAliasDeclaration' ||
-            item.declaration.type === 'TSDeclareFunction' ||
-            item.declaration.type === 'TSModuleDeclaration')
-        ) {
+        if (item.declaration && isTsDeclarationOnlyNode(item.declaration)) {
           continue;
         }
       }
-      const transformed = stripTypeScriptAndTransformJsxAst(item);
+      if (item.type === 'ExportDefaultDeclaration') {
+        if (item.declaration && isTsDeclarationOnlyNode(item.declaration)) {
+          continue;
+        }
+      }
+      const transformed = stripTypeScriptAndTransformJsxAst(item, onJsxSeen);
       if (transformed !== null && transformed !== undefined) {
         nextArr.push(transformed);
       }
@@ -330,7 +383,7 @@ function stripTypeScriptAndTransformJsxAst(node: any): any {
     }
   }
 
-  // Strip TypeScript fields on the current node
+  // Strip TypeScript-only fields on the current node (NEVER strip `optional` on OptionalMemberExpression / OptionalCallExpression!)
   delete node.typeAnnotation;
   delete node.returnType;
   delete node.typeParameters;
@@ -342,25 +395,97 @@ function stripTypeScriptAndTransformJsxAst(node: any): any {
   delete node.readonly;
   delete node.declare;
   delete node.override;
-  delete node.optional;
+  delete node.abstract;
+  delete node.importKind;
+  delete node.exportKind;
+  if (
+    node.type !== 'OptionalMemberExpression' &&
+    node.type !== 'OptionalCallExpression'
+  ) {
+    delete node.optional;
+  }
+
+  // Strip TypeScript `this: T` fake first parameter on functions/methods
+  if (
+    (node.type === 'FunctionDeclaration' ||
+      node.type === 'FunctionExpression' ||
+      node.type === 'ArrowFunctionExpression' ||
+      node.type === 'ObjectMethod' ||
+      node.type === 'ClassMethod' ||
+      node.type === 'ClassPrivateMethod') &&
+    Array.isArray(node.params) &&
+    node.params[0]?.type === 'Identifier' &&
+    node.params[0]?.name === 'this'
+  ) {
+    node.params = node.params.slice(1);
+  }
+
+  // Lower TypeScript constructor parameter properties (`constructor(private readonly api: Api)`) to `this.api = api;`
+  if (
+    node.type === 'ClassMethod' &&
+    node.kind === 'constructor' &&
+    Array.isArray(node.params) &&
+    node.body?.type === 'BlockStatement' &&
+    Array.isArray(node.body.body)
+  ) {
+    const paramPropAssignments: t.ExpressionStatement[] = [];
+    for (const p of node.params) {
+      if (p?.type === 'TSParameterProperty') {
+        const inner = p.parameter;
+        const propName =
+          inner?.type === 'Identifier'
+            ? inner.name
+            : inner?.type === 'AssignmentPattern' && inner.left?.type === 'Identifier'
+              ? inner.left.name
+              : null;
+        if (propName) {
+          paramPropAssignments.push(
+            t.expressionStatement(
+              t.assignmentExpression(
+                '=',
+                t.memberExpression(t.thisExpression(), t.identifier(propName)),
+                t.identifier(propName)
+              )
+            )
+          );
+        }
+      }
+    }
+    if (paramPropAssignments.length > 0) {
+      const superIdx = node.body.body.findIndex(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (s: any) =>
+          s?.type === 'ExpressionStatement' &&
+          s.expression?.type === 'CallExpression' &&
+          s.expression.callee?.type === 'Super'
+      );
+      const insertPos = superIdx >= 0 ? superIdx + 1 : 0;
+      node.body.body.splice(insertPos, 0, ...paramPropAssignments);
+    }
+  }
 
   if (node.type === 'TSParameterProperty') {
-    return stripTypeScriptAndTransformJsxAst(node.parameter);
+    return stripTypeScriptAndTransformJsxAst(node.parameter, onJsxSeen);
   }
 
   // Recursively process child keys first (bottom-up for JSX)
   for (const key of Object.keys(node)) {
-    if (key === 'loc' || key === 'comments' || key === 'leadingComments' || key === 'trailingComments') {
+    if (
+      key === 'loc' ||
+      key === 'comments' ||
+      key === 'leadingComments' ||
+      key === 'trailingComments'
+    ) {
       continue;
     }
     const val = node[key];
     if (val && typeof val === 'object') {
-      node[key] = stripTypeScriptAndTransformJsxAst(val);
+      node[key] = stripTypeScriptAndTransformJsxAst(val, onJsxSeen);
     }
   }
 
   if (node.type === 'JSXElement' || node.type === 'JSXFragment') {
-    return transformJsxNode(node);
+    return transformJsxNode(node, onJsxSeen);
   }
 
   return node;
@@ -429,14 +554,148 @@ function injectScreenAgyAttributes(ast: t.File, relPath: string): boolean {
   return hasJsx;
 }
 
+function collectNamespaceMemberAccesses(
+  ast: t.File,
+  namespaceLocalNames: Set<string>
+): Map<string, Set<string>> {
+  const accesses = new Map<string, Set<string>>();
+  if (namespaceLocalNames.size === 0) return accesses;
+  for (const name of namespaceLocalNames) {
+    accesses.set(name, new Set());
+  }
+
+  function visit(node: unknown) {
+    if (!node || typeof node !== 'object' || typeof (node as t.Node).type !== 'string') return;
+    const typed = node as t.Node;
+    if (
+      (typed.type === 'MemberExpression' || typed.type === 'OptionalMemberExpression') &&
+      !typed.computed &&
+      typed.object.type === 'Identifier' &&
+      namespaceLocalNames.has(typed.object.name) &&
+      typed.property.type === 'Identifier'
+    ) {
+      accesses.get(typed.object.name)?.add(typed.property.name);
+    }
+    const keys = t.VISITOR_KEYS[typed.type];
+    if (!keys) return;
+    const rec = typed as unknown as Record<string, unknown>;
+    for (const key of keys) {
+      const child = rec[key];
+      if (Array.isArray(child)) {
+        for (let i = 0; i < child.length; i++) {
+          if (child[i]) visit(child[i]);
+        }
+      } else if (child && typeof child === 'object') {
+        visit(child);
+      }
+    }
+  }
+
+  visit(ast);
+  return accesses;
+}
+
+function collectRuntimeReferencedIdentifiers(stmts: t.Statement[]): Set<string> {
+  const refs = new Set<string>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function walk(node: any) {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length; i++) {
+        if (node[i]) walk(node[i]);
+      }
+      return;
+    }
+    if (node.type === 'Identifier' && typeof node.name === 'string') {
+      refs.add(node.name);
+    }
+    for (const key of Object.keys(node)) {
+      if (
+        key === 'loc' ||
+        key === 'comments' ||
+        key === 'leadingComments' ||
+        key === 'trailingComments'
+      ) {
+        continue;
+      }
+      const val = node[key];
+      if (val && typeof val === 'object') {
+        walk(val);
+      }
+    }
+  }
+  for (const stmt of stmts) {
+    if (stmt && stmt.type !== 'ImportDeclaration') {
+      walk(stmt);
+    }
+  }
+  return refs;
+}
+
+function getLocalTypeOnlyDeclaredNames(localFilePath: string): Set<string> {
+  const typeNames = new Set<string>();
+  const valueNames = new Set<string>();
+  try {
+    if (!/\.(tsx?|mts|cts)$/i.test(localFilePath) || !fs.existsSync(localFilePath)) {
+      return typeNames;
+    }
+    const raw = fs.readFileSync(localFilePath, 'utf-8');
+    const parsed = parse(raw, {
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx', 'decorators-legacy'],
+      errorRecovery: true,
+    });
+    for (const stmt of parsed.program.body) {
+      if (stmt.type === 'ExportNamedDeclaration') {
+        if (stmt.exportKind === 'type') {
+          if (stmt.declaration && 'id' in stmt.declaration && stmt.declaration.id?.type === 'Identifier') {
+            typeNames.add(stmt.declaration.id.name);
+          }
+          for (const s of stmt.specifiers) {
+            if (s.type === 'ExportSpecifier') {
+              const exp = s.exported.type === 'Identifier' ? s.exported.name : s.exported.value;
+              typeNames.add(exp);
+            }
+          }
+          continue;
+        }
+        const decl = stmt.declaration;
+        if (decl) {
+          if (decl.type === 'TSInterfaceDeclaration' || decl.type === 'TSTypeAliasDeclaration') {
+            typeNames.add(decl.id.name);
+          } else if (
+            (decl.type === 'FunctionDeclaration' ||
+              decl.type === 'ClassDeclaration' ||
+              decl.type === 'TSEnumDeclaration') &&
+            decl.id
+          ) {
+            valueNames.add(decl.id.name);
+          } else if (decl.type === 'VariableDeclaration') {
+            for (const d of decl.declarations) {
+              if (d.id.type === 'Identifier') valueNames.add(d.id.name);
+            }
+          }
+        }
+      }
+    }
+    for (const v of valueNames) {
+      typeNames.delete(v);
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return typeNames;
+}
+
 export interface CompileModuleOptions {
   filePath: string;
   targetProjectRoot: string;
   workspaceRoot?: string;
+  versionTag?: string;
 }
 
 export function compileModuleForBrowser(options: CompileModuleOptions): string {
-  const { filePath, targetProjectRoot, workspaceRoot = targetProjectRoot } = options;
+  const { filePath, targetProjectRoot, workspaceRoot = targetProjectRoot, versionTag } = options;
   const cleanFilePath = filePath.split('?')[0];
   const ext = path.extname(cleanFilePath).toLowerCase();
 
@@ -447,7 +706,7 @@ export function compileModuleForBrowser(options: CompileModuleOptions): string {
     const rawJson = fs.readFileSync(cleanFilePath, 'utf-8');
     return `export default ${rawJson};\n`;
   }
-  if (/\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(ext)) {
+  if (ASSET_EXT_REGEX.test(ext)) {
     const assetUrl = `/@zelune/asset?file=${encodeURIComponent(cleanFilePath)}`;
     return `export default { uri: ${JSON.stringify(assetUrl)} };\n`;
   }
@@ -463,7 +722,12 @@ export function compileModuleForBrowser(options: CompileModuleOptions): string {
   const relPath = path.relative(normalizedTargetRoot, path.resolve(cleanFilePath)).replace(/\\/g, '/');
   const isScreenFile = ALLOWED_SCREEN_PREFIXES.some((prefix) => relPath.startsWith(prefix));
 
-  const hadJsx = isScreenFile ? injectScreenAgyAttributes(ast, relPath) : true;
+  let emittedJsx = false;
+  if (isScreenFile) {
+    if (injectScreenAgyAttributes(ast, relPath)) {
+      emittedJsx = true;
+    }
+  }
 
   const uniqueRoots = Array.from(
     new Set([path.resolve(targetProjectRoot), path.resolve(workspaceRoot)])
@@ -493,8 +757,41 @@ export function compileModuleForBrowser(options: CompileModuleOptions): string {
     return null;
   }
 
+  function resolveLocalOrAliasFile(specifier: string): string | null {
+    if (specifier.startsWith('.')) {
+      const candidate = path.resolve(path.dirname(cleanFilePath), specifier);
+      return tryResolveLocalModule(candidate);
+    }
+    if (
+      specifier.startsWith('@/') ||
+      specifier.startsWith('~/') ||
+      tsconfigAliases.some((m) => specifier === m.prefix || specifier.startsWith(m.prefix + '/'))
+    ) {
+      return resolveAlias(specifier);
+    }
+    return null;
+  }
+
+  function rewriteResolvedLocalFile(resolved: string, requestedExports: string[]): string {
+    const normalized = resolved.replace(/\\/g, '/');
+    if (normalized.endsWith('/src/runtime/MockNavigationContext.tsx')) {
+      return `/@zelune/shim/stub.js?pkg=zelune-mock-nav&exports=${encodeURIComponent(
+        requestedExports.join(',')
+      )}`;
+    }
+    if (normalized.endsWith('/src/runtime/reactNativeShim.ts')) {
+      return '/@zelune/shim/react-native.js';
+    }
+    const vSuffix = versionTag ? `&t=${encodeURIComponent(versionTag)}` : '';
+    return `/@zelune/module?file=${encodeURIComponent(resolved)}${vSuffix}`;
+  }
+
   function rewriteSpecifier(specifier: string, requestedExports: string[]): string {
-    if (specifier === 'react' || specifier === 'react/jsx-runtime' || specifier === 'react/jsx-dev-runtime') {
+    if (
+      specifier === 'react' ||
+      specifier === 'react/jsx-runtime' ||
+      specifier === 'react/jsx-dev-runtime'
+    ) {
       return '/@zelune/shim/react.js';
     }
     if (specifier === 'react-dom' || specifier === 'react-dom/client') {
@@ -506,24 +803,15 @@ export function compileModuleForBrowser(options: CompileModuleOptions): string {
     if (specifier === 'lucide-react' || specifier === 'lucide-react-native') {
       return `/@zelune/shim/lucide.js?exports=${encodeURIComponent(requestedExports.join(','))}`;
     }
-    if (specifier.startsWith('.')) {
-      const candidate = path.resolve(path.dirname(cleanFilePath), specifier);
-      const resolved = tryResolveLocalModule(candidate);
-      if (resolved) {
-        return `/@zelune/module?file=${encodeURIComponent(resolved)}`;
-      }
-      return `/@zelune/shim/stub.js?pkg=${encodeURIComponent(specifier)}&exports=${encodeURIComponent(
-        requestedExports.join(',')
-      )}`;
-    }
     if (
+      specifier.startsWith('.') ||
       specifier.startsWith('@/') ||
       specifier.startsWith('~/') ||
       tsconfigAliases.some((m) => specifier === m.prefix || specifier.startsWith(m.prefix + '/'))
     ) {
-      const resolved = resolveAlias(specifier);
+      const resolved = resolveLocalOrAliasFile(specifier);
       if (resolved) {
-        return `/@zelune/module?file=${encodeURIComponent(resolved)}`;
+        return rewriteResolvedLocalFile(resolved, requestedExports);
       }
       return `/@zelune/shim/stub.js?pkg=${encodeURIComponent(specifier)}&exports=${encodeURIComponent(
         requestedExports.join(',')
@@ -534,22 +822,157 @@ export function compileModuleForBrowser(options: CompileModuleOptions): string {
     )}`;
   }
 
-  // Strip TS types and transform JSX -> React.createElement
-  stripTypeScriptAndTransformJsxAst(ast);
+  // Record genuine side-effect imports (`import './global.css'`) before TS stripping
+  const sideEffectImportNodes = new WeakSet<t.Node>();
+  for (const stmt of ast.program.body) {
+    if (stmt.type === 'ImportDeclaration' && stmt.specifiers.length === 0 && stmt.importKind !== 'type') {
+      sideEffectImportNodes.add(stmt);
+    }
+  }
 
-  let hasReactIdentifierInScope = false;
+  // Strip TS types and transform JSX -> __zeluneReact.createElement
+  stripTypeScriptAndTransformJsxAst(ast, () => {
+    emittedJsx = true;
+  });
+
+  // Transform static CommonJS require('...') calls (e.g. <Image source={require('../assets/logo.png')} />)
+  const hoistedRequireImports: t.ImportDeclaration[] = [];
+  let reqCounter = 0;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function transformRequireCalls(node: any): any {
+    if (!node || typeof node !== 'object') return node;
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length; i++) {
+        if (node[i]) node[i] = transformRequireCalls(node[i]);
+      }
+      return node;
+    }
+    for (const key of Object.keys(node)) {
+      if (
+        key === 'loc' ||
+        key === 'comments' ||
+        key === 'leadingComments' ||
+        key === 'trailingComments'
+      ) {
+        continue;
+      }
+      const val = node[key];
+      if (val && typeof val === 'object') {
+        node[key] = transformRequireCalls(val);
+      }
+    }
+
+    if (
+      node.type === 'CallExpression' &&
+      node.callee?.type === 'Identifier' &&
+      node.callee.name === 'require' &&
+      Array.isArray(node.arguments) &&
+      node.arguments.length === 1 &&
+      node.arguments[0]?.type === 'StringLiteral'
+    ) {
+      const rawSpec = node.arguments[0].value as string;
+      const localResolved = resolveLocalOrAliasFile(rawSpec);
+      if (localResolved && ASSET_EXT_REGEX.test(path.extname(localResolved))) {
+        const assetUrl = `/@zelune/asset?file=${encodeURIComponent(localResolved)}`;
+        return t.objectExpression([
+          t.objectProperty(t.identifier('uri'), t.stringLiteral(assetUrl)),
+        ]);
+      }
+      if (ASSET_EXT_REGEX.test(rawSpec)) {
+        return t.objectExpression([
+          t.objectProperty(t.identifier('uri'), t.stringLiteral('')),
+        ]);
+      }
+      const reqIdent = t.identifier(`__zeluneReq_${reqCounter++}`);
+      const rewritten = localResolved
+        ? rewriteResolvedLocalFile(localResolved, [])
+        : rewriteSpecifier(rawSpec, []);
+      hoistedRequireImports.push(
+        t.importDeclaration([t.importNamespaceSpecifier(reqIdent)], t.stringLiteral(rewritten))
+      );
+      return t.logicalExpression(
+        '??',
+        t.optionalMemberExpression(reqIdent, t.identifier('default'), false, true),
+        reqIdent
+      );
+    }
+
+    return node;
+  }
+
+  transformRequireCalls(ast.program.body);
+
+  // TypeScript Import & Re-Export Elision:
+  // Remove imported bindings that were only used in TypeScript type positions (e.g. `import { Vehicle } from '../types'`),
+  // matching tsc/esbuild so browser ESM never throws `does not provide an export named 'Vehicle'`.
+  const runtimeReferencedIds = collectRuntimeReferencedIdentifiers(ast.program.body);
+  const elidedBody: t.Statement[] = [];
+  for (const stmt of ast.program.body) {
+    if (stmt.type === 'ImportDeclaration') {
+      if (sideEffectImportNodes.has(stmt)) {
+        elidedBody.push(stmt);
+        continue;
+      }
+      stmt.specifiers = stmt.specifiers.filter((spec) => runtimeReferencedIds.has(spec.local.name));
+      if (stmt.specifiers.length > 0) {
+        elidedBody.push(stmt);
+      }
+      continue;
+    }
+    if (
+      stmt.type === 'ExportNamedDeclaration' &&
+      stmt.source &&
+      !stmt.declaration &&
+      stmt.specifiers.length > 0
+    ) {
+      const localTarget = resolveLocalOrAliasFile(stmt.source.value);
+      if (localTarget) {
+        const typeOnlyNames = getLocalTypeOnlyDeclaredNames(localTarget);
+        if (typeOnlyNames.size > 0) {
+          stmt.specifiers = stmt.specifiers.filter((spec) => {
+            if (spec.type !== 'ExportSpecifier') return true;
+            return !typeOnlyNames.has(spec.local.name);
+          });
+          if (stmt.specifiers.length === 0) {
+            continue;
+          }
+        }
+      }
+    }
+    elidedBody.push(stmt);
+  }
+  ast.program.body = elidedBody;
+
+  // Collect namespace member accesses (e.g. `import * as Icons from 'lucide-react-native'` -> `Icons.Home`)
+  const namespaceLocals = new Set<string>();
+  for (const stmt of ast.program.body) {
+    if (stmt.type === 'ImportDeclaration') {
+      for (const spec of stmt.specifiers) {
+        if (spec.type === 'ImportNamespaceSpecifier') {
+          namespaceLocals.add(spec.local.name);
+        }
+      }
+    }
+  }
+  const namespaceMemberMap = collectNamespaceMemberAccesses(ast, namespaceLocals);
+
   for (const stmt of ast.program.body) {
     if (stmt.type === 'ImportDeclaration') {
       const requested: string[] = [];
       for (const spec of stmt.specifiers) {
-        if (spec.local.name === 'React') {
-          hasReactIdentifierInScope = true;
-        }
         if (spec.type === 'ImportSpecifier') {
           const importedName =
             spec.imported.type === 'Identifier' ? spec.imported.name : spec.imported.value;
           if (importedName && importedName !== 'default') {
             requested.push(importedName);
+          }
+        } else if (spec.type === 'ImportNamespaceSpecifier') {
+          const accessed = namespaceMemberMap.get(spec.local.name);
+          if (accessed) {
+            for (const memberName of accessed) {
+              if (memberName !== 'default') requested.push(memberName);
+            }
           }
         }
       }
@@ -562,8 +985,7 @@ export function compileModuleForBrowser(options: CompileModuleOptions): string {
       if (stmt.type === 'ExportNamedDeclaration') {
         for (const spec of stmt.specifiers) {
           if (spec.type === 'ExportSpecifier') {
-            const localName =
-              spec.local.type === 'Identifier' ? spec.local.name : spec.local.value;
+            const localName = spec.local.name;
             const exportedName =
               spec.exported.type === 'Identifier' ? spec.exported.name : spec.exported.value;
             if (localName && localName !== 'default') requested.push(localName);
@@ -575,10 +997,14 @@ export function compileModuleForBrowser(options: CompileModuleOptions): string {
     }
   }
 
-  if (hadJsx && !hasReactIdentifierInScope) {
+  if (hoistedRequireImports.length > 0) {
+    ast.program.body.unshift(...hoistedRequireImports);
+  }
+
+  if (emittedJsx) {
     ast.program.body.unshift(
       t.importDeclaration(
-        [t.importDefaultSpecifier(t.identifier('React'))],
+        [t.importDefaultSpecifier(t.identifier(ZELUNE_JSX_REACT_IDENT))],
         t.stringLiteral('/@zelune/shim/react.js')
       )
     );

@@ -224,7 +224,7 @@ function resolveScreensDirectory(projectRoot) {
   };
 }
 const FORBIDDEN_OBJECT_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
-function safeRealpath(targetPath) {
+function safeRealpath$1(targetPath) {
   try {
     return fs$1.realpathSync(targetPath);
   } catch {
@@ -232,12 +232,12 @@ function safeRealpath(targetPath) {
   }
 }
 function resolveSafeScreenPath(workspaceRoot, relativeFile) {
-  const normalizedRoot = safeRealpath(getActiveProjectRoot(workspaceRoot));
+  const normalizedRoot = safeRealpath$1(getActiveProjectRoot(workspaceRoot));
   const cleanRel = String(relativeFile ?? "").replace(/^[/\\]+/, "");
   const resolved = path.resolve(normalizedRoot, cleanRel);
   const allowedDirs = ["src/screens", "screens", "app", "src/app"].map((d) => {
     const candidate = path.resolve(normalizedRoot, d);
-    return fs$1.existsSync(candidate) ? safeRealpath(candidate) : candidate;
+    return fs$1.existsSync(candidate) ? safeRealpath$1(candidate) : candidate;
   });
   const isLexicallyAllowed = allowedDirs.some(
     (dir) => resolved.startsWith(dir + path.sep) || resolved === dir
@@ -257,7 +257,7 @@ function resolveSafeScreenPath(workspaceRoot, relativeFile) {
         `Security violation: Symbolic link "${relativeFile}" is not permitted inside screen directories`
       );
     }
-    const realTarget = safeRealpath(resolved);
+    const realTarget = safeRealpath$1(resolved);
     const isRealInsideAllowed = allowedDirs.some(
       (dir) => realTarget.startsWith(dir + path.sep) || realTarget === dir
     );
@@ -2080,6 +2080,7 @@ async function readJsonBody(req) {
 }
 const generate = _generate.default ?? _generate;
 const ALLOWED_SCREEN_PREFIXES = ["src/screens/", "screens/", "app/", "src/app/"];
+const ASSET_EXT_REGEX = /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico|ttf|otf|woff2?|mp3|mp4|wav|m4a|webm|lottie|pdf|bin)$/i;
 const RESOLVABLE_EXTENSIONS = [
   ".web.tsx",
   ".web.ts",
@@ -2089,9 +2090,20 @@ const RESOLVABLE_EXTENSIONS = [
   ".ts",
   ".jsx",
   ".js",
+  ".native.tsx",
+  ".native.ts",
+  ".native.jsx",
+  ".native.js",
+  ".ios.tsx",
+  ".ios.ts",
+  ".android.tsx",
+  ".android.ts",
+  ".mjs",
+  ".cjs",
   ".json",
   ".css"
 ];
+const ZELUNE_JSX_REACT_IDENT = "__zeluneReact";
 function stripJsonCommentsAndTrailingCommas(input) {
   const withoutComments = input.replace(
     /("(?:\\.|[^"\\])*")|\/\*[\s\S]*?\*\/|\/\/.*/g,
@@ -2200,7 +2212,7 @@ function convertJsxElementNameToExpr(nameNode) {
   }
   return t.stringLiteral("div");
 }
-function convertJsxAttributesToExpr(attributes) {
+function convertJsxAttributesToExpr(attributes, onJsxSeen) {
   if (attributes.length === 0) {
     return t.nullLiteral();
   }
@@ -2222,7 +2234,7 @@ function convertJsxAttributesToExpr(attributes) {
         valExpr = attr.value.expression;
       }
     } else if (t.isJSXElement(attr.value) || t.isJSXFragment(attr.value)) {
-      valExpr = transformJsxNode(attr.value);
+      valExpr = transformJsxNode(attr.value, onJsxSeen);
     } else {
       valExpr = attr.value;
     }
@@ -2230,9 +2242,10 @@ function convertJsxAttributesToExpr(attributes) {
   }
   return t.objectExpression(props);
 }
-function convertJsxChildrenToExprs(children) {
+function convertJsxChildrenToExprs(children, onJsxSeen) {
   const out = [];
   for (const child of children) {
+    if (!child) continue;
     if (t.isJSXText(child)) {
       const cleaned = cleanJsxText(child.value);
       if (cleaned !== null) {
@@ -2245,27 +2258,30 @@ function convertJsxChildrenToExprs(children) {
     } else if (t.isJSXSpreadChild(child)) {
       out.push(child.expression);
     } else if (t.isJSXElement(child) || t.isJSXFragment(child)) {
-      out.push(transformJsxNode(child));
+      out.push(transformJsxNode(child, onJsxSeen));
+    } else if (t.isSpreadElement(child) || t.isExpression(child)) {
+      out.push(child);
     }
   }
   return out;
 }
-function transformJsxNode(node) {
+function transformJsxNode(node, onJsxSeen) {
+  onJsxSeen();
   const createElMember = t.memberExpression(
-    t.identifier("React"),
+    t.identifier(ZELUNE_JSX_REACT_IDENT),
     t.identifier("createElement")
   );
   if (t.isJSXFragment(node)) {
     const fragMember = t.memberExpression(
-      t.identifier("React"),
+      t.identifier(ZELUNE_JSX_REACT_IDENT),
       t.identifier("Fragment")
     );
-    const children2 = convertJsxChildrenToExprs(node.children);
+    const children2 = convertJsxChildrenToExprs(node.children, onJsxSeen);
     return t.callExpression(createElMember, [fragMember, t.nullLiteral(), ...children2]);
   }
   const tagExpr = convertJsxElementNameToExpr(node.openingElement.name);
-  const propsExpr = convertJsxAttributesToExpr(node.openingElement.attributes);
-  const children = convertJsxChildrenToExprs(node.children);
+  const propsExpr = convertJsxAttributesToExpr(node.openingElement.attributes, onJsxSeen);
+  const children = convertJsxChildrenToExprs(node.children, onJsxSeen);
   return t.callExpression(createElMember, [tagExpr, propsExpr, ...children]);
 }
 function convertTsEnumToVar(enumNode) {
@@ -2288,27 +2304,52 @@ function convertTsEnumToVar(enumNode) {
     t.variableDeclarator(t.identifier(enumNode.id.name), t.objectExpression(props))
   ]);
 }
-function stripTypeScriptAndTransformJsxAst(node) {
-  var _a;
+function isTsDeclarationOnlyNode(item) {
+  const nodeType = item.type;
+  if (nodeType === "TSInterfaceDeclaration" || nodeType === "TSTypeAliasDeclaration" || nodeType === "TSDeclareFunction" || nodeType === "TSDeclareMethod" || nodeType === "TSModuleDeclaration" || nodeType === "TSIndexSignature" || nodeType === "TSAbstractMethodDefinition" || nodeType === "TSAbstractPropertyDefinition" || nodeType === "TSAbstractAccessorProperty") {
+    return true;
+  }
+  if ((nodeType === "ClassMethod" || nodeType === "ClassProperty" || nodeType === "ClassPrivateProperty" || nodeType === "AccessorProperty") && (item.abstract === true || item.declare === true)) {
+    return true;
+  }
+  if (nodeType === "VariableDeclaration" && item.declare === true) {
+    return true;
+  }
+  if (nodeType === "ClassDeclaration" && item.declare === true) {
+    return true;
+  }
+  return false;
+}
+function stripTypeScriptAndTransformJsxAst(node, onJsxSeen = () => {
+}) {
+  var _a, _b, _c, _d, _e;
   if (!node || typeof node !== "object") return node;
   if (Array.isArray(node)) {
     const nextArr = [];
     for (let i = 0; i < node.length; i++) {
       const item = node[i];
       if (!item) continue;
-      if (item.type === "TSInterfaceDeclaration" || item.type === "TSTypeAliasDeclaration" || item.type === "TSDeclareFunction" || item.type === "TSDeclareMethod" || item.type === "TSModuleDeclaration" || item.type === "TSIndexSignature") {
+      if (isTsDeclarationOnlyNode(item)) {
         continue;
       }
       if (item.type === "ImportDeclaration" && item.importKind === "type") {
         continue;
       }
+      if (item.type === "ExportAllDeclaration" && item.exportKind === "type") {
+        continue;
+      }
       if (item.type === "ExportNamedDeclaration") {
         if (item.exportKind === "type") continue;
-        if (item.declaration && (item.declaration.type === "TSInterfaceDeclaration" || item.declaration.type === "TSTypeAliasDeclaration" || item.declaration.type === "TSDeclareFunction" || item.declaration.type === "TSModuleDeclaration")) {
+        if (item.declaration && isTsDeclarationOnlyNode(item.declaration)) {
           continue;
         }
       }
-      const transformed = stripTypeScriptAndTransformJsxAst(item);
+      if (item.type === "ExportDefaultDeclaration") {
+        if (item.declaration && isTsDeclarationOnlyNode(item.declaration)) {
+          continue;
+        }
+      }
+      const transformed = stripTypeScriptAndTransformJsxAst(item, onJsxSeen);
       if (transformed !== null && transformed !== void 0) {
         nextArr.push(transformed);
       }
@@ -2355,9 +2396,48 @@ function stripTypeScriptAndTransformJsxAst(node) {
   delete node.readonly;
   delete node.declare;
   delete node.override;
-  delete node.optional;
+  delete node.abstract;
+  delete node.importKind;
+  delete node.exportKind;
+  if (node.type !== "OptionalMemberExpression" && node.type !== "OptionalCallExpression") {
+    delete node.optional;
+  }
+  if ((node.type === "FunctionDeclaration" || node.type === "FunctionExpression" || node.type === "ArrowFunctionExpression" || node.type === "ObjectMethod" || node.type === "ClassMethod" || node.type === "ClassPrivateMethod") && Array.isArray(node.params) && ((_b = node.params[0]) == null ? void 0 : _b.type) === "Identifier" && ((_c = node.params[0]) == null ? void 0 : _c.name) === "this") {
+    node.params = node.params.slice(1);
+  }
+  if (node.type === "ClassMethod" && node.kind === "constructor" && Array.isArray(node.params) && ((_d = node.body) == null ? void 0 : _d.type) === "BlockStatement" && Array.isArray(node.body.body)) {
+    const paramPropAssignments = [];
+    for (const p of node.params) {
+      if ((p == null ? void 0 : p.type) === "TSParameterProperty") {
+        const inner = p.parameter;
+        const propName = (inner == null ? void 0 : inner.type) === "Identifier" ? inner.name : (inner == null ? void 0 : inner.type) === "AssignmentPattern" && ((_e = inner.left) == null ? void 0 : _e.type) === "Identifier" ? inner.left.name : null;
+        if (propName) {
+          paramPropAssignments.push(
+            t.expressionStatement(
+              t.assignmentExpression(
+                "=",
+                t.memberExpression(t.thisExpression(), t.identifier(propName)),
+                t.identifier(propName)
+              )
+            )
+          );
+        }
+      }
+    }
+    if (paramPropAssignments.length > 0) {
+      const superIdx = node.body.body.findIndex(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (s) => {
+          var _a2, _b2;
+          return (s == null ? void 0 : s.type) === "ExpressionStatement" && ((_a2 = s.expression) == null ? void 0 : _a2.type) === "CallExpression" && ((_b2 = s.expression.callee) == null ? void 0 : _b2.type) === "Super";
+        }
+      );
+      const insertPos = superIdx >= 0 ? superIdx + 1 : 0;
+      node.body.body.splice(insertPos, 0, ...paramPropAssignments);
+    }
+  }
   if (node.type === "TSParameterProperty") {
-    return stripTypeScriptAndTransformJsxAst(node.parameter);
+    return stripTypeScriptAndTransformJsxAst(node.parameter, onJsxSeen);
   }
   for (const key of Object.keys(node)) {
     if (key === "loc" || key === "comments" || key === "leadingComments" || key === "trailingComments") {
@@ -2365,11 +2445,11 @@ function stripTypeScriptAndTransformJsxAst(node) {
     }
     const val = node[key];
     if (val && typeof val === "object") {
-      node[key] = stripTypeScriptAndTransformJsxAst(val);
+      node[key] = stripTypeScriptAndTransformJsxAst(val, onJsxSeen);
     }
   }
   if (node.type === "JSXElement" || node.type === "JSXFragment") {
-    return transformJsxNode(node);
+    return transformJsxNode(node, onJsxSeen);
   }
   return node;
 }
@@ -2431,8 +2511,117 @@ function injectScreenAgyAttributes(ast, relPath) {
   visit(ast);
   return hasJsx;
 }
+function collectNamespaceMemberAccesses(ast, namespaceLocalNames) {
+  const accesses = /* @__PURE__ */ new Map();
+  if (namespaceLocalNames.size === 0) return accesses;
+  for (const name of namespaceLocalNames) {
+    accesses.set(name, /* @__PURE__ */ new Set());
+  }
+  function visit(node) {
+    var _a;
+    if (!node || typeof node !== "object" || typeof node.type !== "string") return;
+    const typed = node;
+    if ((typed.type === "MemberExpression" || typed.type === "OptionalMemberExpression") && !typed.computed && typed.object.type === "Identifier" && namespaceLocalNames.has(typed.object.name) && typed.property.type === "Identifier") {
+      (_a = accesses.get(typed.object.name)) == null ? void 0 : _a.add(typed.property.name);
+    }
+    const keys = t.VISITOR_KEYS[typed.type];
+    if (!keys) return;
+    const rec = typed;
+    for (const key of keys) {
+      const child = rec[key];
+      if (Array.isArray(child)) {
+        for (let i = 0; i < child.length; i++) {
+          if (child[i]) visit(child[i]);
+        }
+      } else if (child && typeof child === "object") {
+        visit(child);
+      }
+    }
+  }
+  visit(ast);
+  return accesses;
+}
+function collectRuntimeReferencedIdentifiers(stmts) {
+  const refs = /* @__PURE__ */ new Set();
+  function walk(node) {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length; i++) {
+        if (node[i]) walk(node[i]);
+      }
+      return;
+    }
+    if (node.type === "Identifier" && typeof node.name === "string") {
+      refs.add(node.name);
+    }
+    for (const key of Object.keys(node)) {
+      if (key === "loc" || key === "comments" || key === "leadingComments" || key === "trailingComments") {
+        continue;
+      }
+      const val = node[key];
+      if (val && typeof val === "object") {
+        walk(val);
+      }
+    }
+  }
+  for (const stmt of stmts) {
+    if (stmt && stmt.type !== "ImportDeclaration") {
+      walk(stmt);
+    }
+  }
+  return refs;
+}
+function getLocalTypeOnlyDeclaredNames(localFilePath) {
+  var _a;
+  const typeNames = /* @__PURE__ */ new Set();
+  const valueNames = /* @__PURE__ */ new Set();
+  try {
+    if (!/\.(tsx?|mts|cts)$/i.test(localFilePath) || !fs$1.existsSync(localFilePath)) {
+      return typeNames;
+    }
+    const raw = fs$1.readFileSync(localFilePath, "utf-8");
+    const parsed = parse(raw, {
+      sourceType: "module",
+      plugins: ["typescript", "jsx", "decorators-legacy"],
+      errorRecovery: true
+    });
+    for (const stmt of parsed.program.body) {
+      if (stmt.type === "ExportNamedDeclaration") {
+        if (stmt.exportKind === "type") {
+          if (stmt.declaration && "id" in stmt.declaration && ((_a = stmt.declaration.id) == null ? void 0 : _a.type) === "Identifier") {
+            typeNames.add(stmt.declaration.id.name);
+          }
+          for (const s of stmt.specifiers) {
+            if (s.type === "ExportSpecifier") {
+              const exp = s.exported.type === "Identifier" ? s.exported.name : s.exported.value;
+              typeNames.add(exp);
+            }
+          }
+          continue;
+        }
+        const decl = stmt.declaration;
+        if (decl) {
+          if (decl.type === "TSInterfaceDeclaration" || decl.type === "TSTypeAliasDeclaration") {
+            typeNames.add(decl.id.name);
+          } else if ((decl.type === "FunctionDeclaration" || decl.type === "ClassDeclaration" || decl.type === "TSEnumDeclaration") && decl.id) {
+            valueNames.add(decl.id.name);
+          } else if (decl.type === "VariableDeclaration") {
+            for (const d of decl.declarations) {
+              if (d.id.type === "Identifier") valueNames.add(d.id.name);
+            }
+          }
+        }
+      }
+    }
+    for (const v of valueNames) {
+      typeNames.delete(v);
+    }
+  } catch {
+  }
+  return typeNames;
+}
 function compileModuleForBrowser(options) {
-  const { filePath, targetProjectRoot, workspaceRoot = targetProjectRoot } = options;
+  const { filePath, targetProjectRoot, workspaceRoot = targetProjectRoot, versionTag } = options;
   const cleanFilePath = filePath.split("?")[0];
   const ext = path.extname(cleanFilePath).toLowerCase();
   if (ext === ".css") {
@@ -2443,7 +2632,7 @@ function compileModuleForBrowser(options) {
     return `export default ${rawJson};
 `;
   }
-  if (/\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(ext)) {
+  if (ASSET_EXT_REGEX.test(ext)) {
     const assetUrl = `/@zelune/asset?file=${encodeURIComponent(cleanFilePath)}`;
     return `export default { uri: ${JSON.stringify(assetUrl)} };
 `;
@@ -2457,7 +2646,12 @@ function compileModuleForBrowser(options) {
   const normalizedTargetRoot = path.resolve(targetProjectRoot);
   const relPath = path.relative(normalizedTargetRoot, path.resolve(cleanFilePath)).replace(/\\/g, "/");
   const isScreenFile = ALLOWED_SCREEN_PREFIXES.some((prefix) => relPath.startsWith(prefix));
-  const hadJsx = isScreenFile ? injectScreenAgyAttributes(ast, relPath) : true;
+  let emittedJsx = false;
+  if (isScreenFile) {
+    if (injectScreenAgyAttributes(ast, relPath)) {
+      emittedJsx = true;
+    }
+  }
   const uniqueRoots = Array.from(
     /* @__PURE__ */ new Set([path.resolve(targetProjectRoot), path.resolve(workspaceRoot)])
   );
@@ -2484,6 +2678,29 @@ function compileModuleForBrowser(options) {
     }
     return null;
   }
+  function resolveLocalOrAliasFile(specifier) {
+    if (specifier.startsWith(".")) {
+      const candidate = path.resolve(path.dirname(cleanFilePath), specifier);
+      return tryResolveLocalModule(candidate);
+    }
+    if (specifier.startsWith("@/") || specifier.startsWith("~/") || tsconfigAliases.some((m) => specifier === m.prefix || specifier.startsWith(m.prefix + "/"))) {
+      return resolveAlias(specifier);
+    }
+    return null;
+  }
+  function rewriteResolvedLocalFile(resolved, requestedExports) {
+    const normalized = resolved.replace(/\\/g, "/");
+    if (normalized.endsWith("/src/runtime/MockNavigationContext.tsx")) {
+      return `/@zelune/shim/stub.js?pkg=zelune-mock-nav&exports=${encodeURIComponent(
+        requestedExports.join(",")
+      )}`;
+    }
+    if (normalized.endsWith("/src/runtime/reactNativeShim.ts")) {
+      return "/@zelune/shim/react-native.js";
+    }
+    const vSuffix = versionTag ? `&t=${encodeURIComponent(versionTag)}` : "";
+    return `/@zelune/module?file=${encodeURIComponent(resolved)}${vSuffix}`;
+  }
   function rewriteSpecifier(specifier, requestedExports) {
     if (specifier === "react" || specifier === "react/jsx-runtime" || specifier === "react/jsx-dev-runtime") {
       return "/@zelune/shim/react.js";
@@ -2497,20 +2714,10 @@ function compileModuleForBrowser(options) {
     if (specifier === "lucide-react" || specifier === "lucide-react-native") {
       return `/@zelune/shim/lucide.js?exports=${encodeURIComponent(requestedExports.join(","))}`;
     }
-    if (specifier.startsWith(".")) {
-      const candidate = path.resolve(path.dirname(cleanFilePath), specifier);
-      const resolved = tryResolveLocalModule(candidate);
+    if (specifier.startsWith(".") || specifier.startsWith("@/") || specifier.startsWith("~/") || tsconfigAliases.some((m) => specifier === m.prefix || specifier.startsWith(m.prefix + "/"))) {
+      const resolved = resolveLocalOrAliasFile(specifier);
       if (resolved) {
-        return `/@zelune/module?file=${encodeURIComponent(resolved)}`;
-      }
-      return `/@zelune/shim/stub.js?pkg=${encodeURIComponent(specifier)}&exports=${encodeURIComponent(
-        requestedExports.join(",")
-      )}`;
-    }
-    if (specifier.startsWith("@/") || specifier.startsWith("~/") || tsconfigAliases.some((m) => specifier === m.prefix || specifier.startsWith(m.prefix + "/"))) {
-      const resolved = resolveAlias(specifier);
-      if (resolved) {
-        return `/@zelune/module?file=${encodeURIComponent(resolved)}`;
+        return rewriteResolvedLocalFile(resolved, requestedExports);
       }
       return `/@zelune/shim/stub.js?pkg=${encodeURIComponent(specifier)}&exports=${encodeURIComponent(
         requestedExports.join(",")
@@ -2520,19 +2727,121 @@ function compileModuleForBrowser(options) {
       requestedExports.join(",")
     )}`;
   }
-  stripTypeScriptAndTransformJsxAst(ast);
-  let hasReactIdentifierInScope = false;
+  const sideEffectImportNodes = /* @__PURE__ */ new WeakSet();
+  for (const stmt of ast.program.body) {
+    if (stmt.type === "ImportDeclaration" && stmt.specifiers.length === 0 && stmt.importKind !== "type") {
+      sideEffectImportNodes.add(stmt);
+    }
+  }
+  stripTypeScriptAndTransformJsxAst(ast, () => {
+    emittedJsx = true;
+  });
+  const hoistedRequireImports = [];
+  let reqCounter = 0;
+  function transformRequireCalls(node) {
+    var _a, _b;
+    if (!node || typeof node !== "object") return node;
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length; i++) {
+        if (node[i]) node[i] = transformRequireCalls(node[i]);
+      }
+      return node;
+    }
+    for (const key of Object.keys(node)) {
+      if (key === "loc" || key === "comments" || key === "leadingComments" || key === "trailingComments") {
+        continue;
+      }
+      const val = node[key];
+      if (val && typeof val === "object") {
+        node[key] = transformRequireCalls(val);
+      }
+    }
+    if (node.type === "CallExpression" && ((_a = node.callee) == null ? void 0 : _a.type) === "Identifier" && node.callee.name === "require" && Array.isArray(node.arguments) && node.arguments.length === 1 && ((_b = node.arguments[0]) == null ? void 0 : _b.type) === "StringLiteral") {
+      const rawSpec = node.arguments[0].value;
+      const localResolved = resolveLocalOrAliasFile(rawSpec);
+      if (localResolved && ASSET_EXT_REGEX.test(path.extname(localResolved))) {
+        const assetUrl = `/@zelune/asset?file=${encodeURIComponent(localResolved)}`;
+        return t.objectExpression([
+          t.objectProperty(t.identifier("uri"), t.stringLiteral(assetUrl))
+        ]);
+      }
+      if (ASSET_EXT_REGEX.test(rawSpec)) {
+        return t.objectExpression([
+          t.objectProperty(t.identifier("uri"), t.stringLiteral(""))
+        ]);
+      }
+      const reqIdent = t.identifier(`__zeluneReq_${reqCounter++}`);
+      const rewritten = localResolved ? rewriteResolvedLocalFile(localResolved, []) : rewriteSpecifier(rawSpec, []);
+      hoistedRequireImports.push(
+        t.importDeclaration([t.importNamespaceSpecifier(reqIdent)], t.stringLiteral(rewritten))
+      );
+      return t.logicalExpression(
+        "??",
+        t.optionalMemberExpression(reqIdent, t.identifier("default"), false, true),
+        reqIdent
+      );
+    }
+    return node;
+  }
+  transformRequireCalls(ast.program.body);
+  const runtimeReferencedIds = collectRuntimeReferencedIdentifiers(ast.program.body);
+  const elidedBody = [];
+  for (const stmt of ast.program.body) {
+    if (stmt.type === "ImportDeclaration") {
+      if (sideEffectImportNodes.has(stmt)) {
+        elidedBody.push(stmt);
+        continue;
+      }
+      stmt.specifiers = stmt.specifiers.filter((spec) => runtimeReferencedIds.has(spec.local.name));
+      if (stmt.specifiers.length > 0) {
+        elidedBody.push(stmt);
+      }
+      continue;
+    }
+    if (stmt.type === "ExportNamedDeclaration" && stmt.source && !stmt.declaration && stmt.specifiers.length > 0) {
+      const localTarget = resolveLocalOrAliasFile(stmt.source.value);
+      if (localTarget) {
+        const typeOnlyNames = getLocalTypeOnlyDeclaredNames(localTarget);
+        if (typeOnlyNames.size > 0) {
+          stmt.specifiers = stmt.specifiers.filter((spec) => {
+            if (spec.type !== "ExportSpecifier") return true;
+            return !typeOnlyNames.has(spec.local.name);
+          });
+          if (stmt.specifiers.length === 0) {
+            continue;
+          }
+        }
+      }
+    }
+    elidedBody.push(stmt);
+  }
+  ast.program.body = elidedBody;
+  const namespaceLocals = /* @__PURE__ */ new Set();
+  for (const stmt of ast.program.body) {
+    if (stmt.type === "ImportDeclaration") {
+      for (const spec of stmt.specifiers) {
+        if (spec.type === "ImportNamespaceSpecifier") {
+          namespaceLocals.add(spec.local.name);
+        }
+      }
+    }
+  }
+  const namespaceMemberMap = collectNamespaceMemberAccesses(ast, namespaceLocals);
   for (const stmt of ast.program.body) {
     if (stmt.type === "ImportDeclaration") {
       const requested = [];
       for (const spec of stmt.specifiers) {
-        if (spec.local.name === "React") {
-          hasReactIdentifierInScope = true;
-        }
         if (spec.type === "ImportSpecifier") {
           const importedName = spec.imported.type === "Identifier" ? spec.imported.name : spec.imported.value;
           if (importedName && importedName !== "default") {
             requested.push(importedName);
+          }
+        } else if (spec.type === "ImportNamespaceSpecifier") {
+          const accessed = namespaceMemberMap.get(spec.local.name);
+          if (accessed) {
+            for (const memberName of accessed) {
+              if (memberName !== "default") requested.push(memberName);
+            }
           }
         }
       }
@@ -2542,7 +2851,7 @@ function compileModuleForBrowser(options) {
       if (stmt.type === "ExportNamedDeclaration") {
         for (const spec of stmt.specifiers) {
           if (spec.type === "ExportSpecifier") {
-            const localName = spec.local.type === "Identifier" ? spec.local.name : spec.local.value;
+            const localName = spec.local.name;
             const exportedName = spec.exported.type === "Identifier" ? spec.exported.name : spec.exported.value;
             if (localName && localName !== "default") requested.push(localName);
             if (exportedName && exportedName !== "default") requested.push(exportedName);
@@ -2552,10 +2861,13 @@ function compileModuleForBrowser(options) {
       stmt.source.value = rewriteSpecifier(stmt.source.value, requested);
     }
   }
-  if (hadJsx && !hasReactIdentifierInScope) {
+  if (hoistedRequireImports.length > 0) {
+    ast.program.body.unshift(...hoistedRequireImports);
+  }
+  if (emittedJsx) {
     ast.program.body.unshift(
       t.importDeclaration(
-        [t.importDefaultSpecifier(t.identifier("React"))],
+        [t.importDefaultSpecifier(t.identifier(ZELUNE_JSX_REACT_IDENT))],
         t.stringLiteral("/@zelune/shim/react.js")
       )
     );
@@ -2721,7 +3033,17 @@ const MIME_TYPES = {
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
   ".gif": "image/gif",
-  ".ico": "image/x-icon"
+  ".avif": "image/avif",
+  ".bmp": "image/bmp",
+  ".ico": "image/x-icon",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm"
 };
 const REACT_EXPORTS = [
   "Children",
@@ -2827,6 +3149,240 @@ const REACT_NATIVE_EXPORTS = [
   "Networking",
   "Settings"
 ];
+const DEFAULT_MOCK_NAV_EXPORTS = [
+  "MockNavigationProvider",
+  "useNavigation",
+  "useRoute",
+  "useFocusEffect",
+  "useIsFocused",
+  "useScrollToTop",
+  "NavigationContainer",
+  "CommonActions",
+  "StackActions",
+  "createNativeStackNavigator",
+  "createStackNavigator",
+  "createBottomTabNavigator",
+  "createDrawerNavigator",
+  "createMaterialTopTabNavigator",
+  "DefaultTheme",
+  "DarkTheme",
+  "ThemeProvider",
+  "useTheme",
+  "useNavigationContainerRef",
+  "useRouter",
+  "router",
+  "useLocalSearchParams",
+  "useGlobalSearchParams",
+  "usePathname",
+  "useSegments",
+  "useRootNavigationState",
+  "Link",
+  "Redirect",
+  "Stack",
+  "Tabs",
+  "Drawer",
+  "Slot",
+  "SplashScreen",
+  "SafeAreaProvider",
+  "SafeAreaView",
+  "useSafeAreaInsets",
+  "useSafeAreaFrame",
+  "SafeAreaInsetsContext",
+  "SafeAreaFrameContext",
+  "withSafeAreaInsets",
+  "initialWindowMetrics",
+  "StatusBar",
+  "createVectorIconComponent",
+  "Ionicons",
+  "Feather",
+  "MaterialIcons",
+  "MaterialCommunityIcons",
+  "FontAwesome",
+  "FontAwesome5",
+  "FontAwesome6",
+  "AntDesign",
+  "Entypo",
+  "EvilIcons",
+  "Foundation",
+  "Octicons",
+  "SimpleLineIcons",
+  "Zocial",
+  "Fontisto",
+  "createIconSet",
+  "createIconSetFromIcoMoon",
+  "createIconSetFromFontello",
+  "LinearGradient",
+  "BlurView",
+  "Image",
+  "ImageBackground",
+  "FlashList",
+  "Svg",
+  "Circle",
+  "Ellipse",
+  "G",
+  "SvgText",
+  "TSpan",
+  "TextPath",
+  "Path",
+  "Polygon",
+  "Polyline",
+  "Line",
+  "Rect",
+  "Use",
+  "SvgImage",
+  "Symbol",
+  "Defs",
+  "RadialGradient",
+  "Stop",
+  "ClipPath",
+  "Pattern",
+  "Mask",
+  "ForeignObject",
+  "SvgXml",
+  "SvgUri",
+  "FadeIn",
+  "FadeInDown",
+  "FadeInUp",
+  "FadeInLeft",
+  "FadeInRight",
+  "FadeOut",
+  "FadeOutDown",
+  "FadeOutUp",
+  "SlideInDown",
+  "SlideInUp",
+  "SlideInLeft",
+  "SlideInRight",
+  "SlideOutDown",
+  "SlideOutUp",
+  "SlideOutLeft",
+  "SlideOutRight",
+  "ZoomIn",
+  "ZoomOut",
+  "Layout",
+  "LinearTransition",
+  "SequencedTransition",
+  "FadingTransition",
+  "useSharedValue",
+  "useAnimatedStyle",
+  "useDerivedValue",
+  "useAnimatedProps",
+  "useAnimatedScrollHandler",
+  "useAnimatedRef",
+  "useAnimatedGestureHandler",
+  "withTiming",
+  "withSpring",
+  "withDelay",
+  "withSequence",
+  "withRepeat",
+  "cancelAnimation",
+  "runOnJS",
+  "runOnUI",
+  "interpolate",
+  "Extrapolation",
+  "Extrapolate",
+  "Easing",
+  "createAnimatedComponent",
+  "Animated",
+  "GestureHandlerRootView",
+  "ScrollView",
+  "FlatList",
+  "TouchableOpacity",
+  "TouchableHighlight",
+  "TouchableWithoutFeedback",
+  "Pressable",
+  "Swipeable",
+  "DrawerLayout",
+  "PanGestureHandler",
+  "TapGestureHandler",
+  "LongPressGestureHandler",
+  "GestureDetector",
+  "Gesture",
+  "State",
+  "Directions",
+  "ImpactFeedbackStyle",
+  "NotificationFeedbackType",
+  "impactAsync",
+  "notificationAsync",
+  "selectionAsync",
+  "Constants",
+  "useFonts",
+  "loadAsync",
+  "isLoaded",
+  "preventAutoHideAsync",
+  "hideAsync",
+  "AsyncStorage",
+  "getItemAsync",
+  "setItemAsync",
+  "deleteItemAsync",
+  "setStringAsync",
+  "getStringAsync",
+  "openURL",
+  "createURL",
+  "create",
+  "useStore",
+  "QueryClient",
+  "QueryClientProvider",
+  "useQueryClient",
+  "useQuery",
+  "useInfiniteQuery",
+  "useMutation",
+  "createSafeChainableProxy",
+  "SAFE_CHAINABLE_PROXY",
+  "z",
+  "string",
+  "number",
+  "boolean",
+  "object",
+  "array",
+  "union",
+  "literal",
+  "record",
+  "tuple",
+  "any",
+  "unknown",
+  "optional",
+  "nullable",
+  "coerce",
+  "zodResolver",
+  "yupResolver",
+  "scale",
+  "verticalScale",
+  "moderateScale",
+  "moderateVerticalScale",
+  "s",
+  "vs",
+  "ms",
+  "mvs",
+  "RFValue",
+  "RFPercentage",
+  "widthPercentageToDP",
+  "heightPercentageToDP",
+  "wp",
+  "hp",
+  "clsx",
+  "cn",
+  "twMerge",
+  "styled",
+  "cssInterop",
+  "remapProps",
+  "tw",
+  "createTw",
+  "useForm",
+  "useFormContext",
+  "FormProvider",
+  "useWatch",
+  "useFieldArray",
+  "Controller",
+  "SAFE_CONTEXT_FALLBACK",
+  "createClient"
+];
+function safeRealpath(targetPath) {
+  try {
+    return fs$1.realpathSync(targetPath);
+  } catch {
+    return path.resolve(targetPath);
+  }
+}
 function sendJson(res, status, payload) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -2934,7 +3490,7 @@ function buildUniversalStubModule(requestedNames) {
   ];
   const unique = Array.from(
     new Set(
-      requestedNames.map((s) => s.trim()).filter((s) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(s) && s !== "default")
+      [...DEFAULT_MOCK_NAV_EXPORTS, ...requestedNames].map((s) => s.trim()).filter((s) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(s) && s !== "default")
     )
   );
   for (const name of unique) {
@@ -2966,16 +3522,37 @@ async function resolveConnectedProjectName(workspaceRoot) {
 async function startStudioHttpServer(options) {
   const { packageRoot, targetProjectRoot, workspaceRoot } = options;
   const distDir = path.resolve(packageRoot, "dist");
+  const activeProjectRoot = getActiveProjectRoot(targetProjectRoot);
   const allowedRoots = Array.from(
     /* @__PURE__ */ new Set([
       path.resolve(packageRoot),
+      safeRealpath(packageRoot),
       path.resolve(targetProjectRoot),
-      path.resolve(workspaceRoot)
+      safeRealpath(targetProjectRoot),
+      path.resolve(activeProjectRoot),
+      safeRealpath(activeProjectRoot),
+      path.resolve(workspaceRoot),
+      safeRealpath(workspaceRoot)
     ])
   );
-  function isPathAllowed(candidatePath) {
-    const resolved = path.resolve(candidatePath);
-    return allowedRoots.some((root) => resolved === root || resolved.startsWith(root + path.sep));
+  function resolveCandidateFileParam(rawParam) {
+    const clean = rawParam.split("?")[0].trim();
+    if (!clean) return null;
+    const candidate = path.isAbsolute(clean) ? path.resolve(clean) : path.resolve(getActiveProjectRoot(targetProjectRoot), clean.replace(/^[/\\]+/, ""));
+    const lexicallyAllowed = allowedRoots.some(
+      (root) => candidate === root || candidate.startsWith(root + path.sep)
+    );
+    if (!lexicallyAllowed || !fs$1.existsSync(candidate)) {
+      return null;
+    }
+    const real = safeRealpath(candidate);
+    const canonicallyAllowed = allowedRoots.some(
+      (root) => real === root || real.startsWith(root + path.sep)
+    );
+    if (!canonicallyAllowed) {
+      return null;
+    }
+    return real;
   }
   const requestHandler = async (req, res) => {
     const rawUrl = req.url ?? "/";
@@ -3115,34 +3692,36 @@ async function startStudioHttpServer(options) {
     }
     if (pathname === "/@zelune/module") {
       const fileParam = searchParams.get("file") ?? "";
-      if (!fileParam || !isPathAllowed(fileParam) || !fs$1.existsSync(fileParam)) {
-        res.statusCode = 404;
-        return res.end("// Module not found\nexport default {};\n");
+      const versionTag = searchParams.get("t") ?? void 0;
+      const resolvedFile = resolveCandidateFileParam(fileParam);
+      if (!resolvedFile) {
+        return sendJs(res, "// Module not found\nexport default {};\n");
       }
       try {
         const compiled = compileModuleForBrowser({
-          filePath: fileParam,
-          targetProjectRoot,
-          workspaceRoot
+          filePath: resolvedFile,
+          targetProjectRoot: getActiveProjectRoot(targetProjectRoot),
+          workspaceRoot,
+          versionTag
         });
         return sendJs(res, compiled);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        res.statusCode = 500;
-        return res.end(`throw new Error(${JSON.stringify(msg)});
+        return sendJs(res, `throw new Error(${JSON.stringify(msg)});
 `);
       }
     }
     if (pathname === "/@zelune/asset") {
       const fileParam = searchParams.get("file") ?? "";
-      if (!fileParam || !isPathAllowed(fileParam) || !fs$1.existsSync(fileParam)) {
+      const resolvedAsset = resolveCandidateFileParam(fileParam);
+      if (!resolvedAsset) {
         res.statusCode = 404;
         return res.end("Not found");
       }
-      const ext = path.extname(fileParam).toLowerCase();
+      const ext = path.extname(resolvedAsset).toLowerCase();
       res.statusCode = 200;
       res.setHeader("Content-Type", MIME_TYPES[ext] ?? "application/octet-stream");
-      return fs$1.createReadStream(fileParam).pipe(res);
+      return fs$1.createReadStream(resolvedAsset).pipe(res);
     }
     if (pathname === "/" || pathname === "/index.html") {
       const indexHtmlPath = path.join(distDir, "index.html");
@@ -3153,9 +3732,9 @@ async function startStudioHttpServer(options) {
       const rawHtml = await fs.readFile(indexHtmlPath, "utf-8");
       const tailwindTheme = loadProjectTailwindTheme([targetProjectRoot, workspaceRoot]);
       const discoveredManifest = discoverScreenFilesSync(targetProjectRoot);
-      const runtimeScript = `<script>window.__ZELUNE_TAILWIND_THEME__ = ${JSON.stringify(
-        tailwindTheme
-      )}; window.__ZELUNE_SCREEN_MANIFEST__ = ${JSON.stringify(discoveredManifest)};<\/script>`;
+      const safeThemeJson = JSON.stringify(tailwindTheme).replace(/</g, "\\u003c");
+      const safeManifestJson = JSON.stringify(discoveredManifest).replace(/</g, "\\u003c");
+      const runtimeScript = `<script>window.__ZELUNE_STUDIO_SERVER__ = true; window.__ZELUNE_TAILWIND_THEME__ = ${safeThemeJson}; window.__ZELUNE_SCREEN_MANIFEST__ = ${safeManifestJson};<\/script>`;
       const injectedHtml = rawHtml.replace("<head>", `<head>
     ${runtimeScript}`);
       res.statusCode = 200;
@@ -3449,7 +4028,7 @@ async function handleMcpJsonRpcRequest(request, customWorkspaceRoot) {
           },
           serverInfo: {
             name: "zelune",
-            version: "1.6.4"
+            version: "1.6.5"
           }
         }
       };

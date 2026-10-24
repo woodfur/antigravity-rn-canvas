@@ -186,9 +186,9 @@ export function viteVirtualScreensPlugin(workspaceRoot: string): Plugin {
         const fsUrl =
           '/@fs' + (normalizedFullPath.startsWith('/') ? '' : '/') + normalizedFullPath;
         const loaderExpr = isBuild
-          ? `(attempt) => attempt > 0 ? import(/* @vite-ignore */ ${JSON.stringify(
-              normalizedFullPath
-            )} + '?t=' + Date.now()) : import(${JSON.stringify(normalizedFullPath)})`
+          ? `(attempt) => attempt > 0 ? import(/* @vite-ignore */ '/@zelune/module?file=' + encodeURIComponent(${JSON.stringify(
+              scr.relPath
+            )}) + '&t=' + Date.now()) : import(${JSON.stringify(normalizedFullPath)})`
           : `(attempt) => import(/* @vite-ignore */ ${JSON.stringify(
               fsUrl
             )} + (attempt > 0 ? '?t=' + Date.now() : ''))`;
@@ -223,6 +223,12 @@ export function viteVirtualScreensPlugin(workspaceRoot: string): Plugin {
         `const __registry = buildRuntimeScreenRegistry();`,
         `export const SCREEN_COMPONENTS = __registry.components;`,
         `export const SCREEN_ORDER = __registry.order;`,
+        `export function getDynamicScreenComponent(screenId, filePath) {`,
+        `  if (SCREEN_COMPONENTS[screenId]) return SCREEN_COMPONENTS[screenId];`,
+        `  const comp = createIsolatedScreenComponent(screenId, filePath, () => import(/* @vite-ignore */ '/@zelune/module?file=' + encodeURIComponent(filePath) + '&t=' + Date.now()));`,
+        `  SCREEN_COMPONENTS[screenId] = comp;`,
+        `  return comp;`,
+        `}`,
       ].join('\n');
     },
     configureServer(server) {
