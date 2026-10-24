@@ -39,7 +39,7 @@ export const FlowArrowsLayer: React.FC<FlowArrowsLayerProps> = React.memo(({
         height: 6000,
         pointerEvents: 'none',
         overflow: 'visible',
-        zIndex: 25,
+        zIndex: 5,
       }}
     >
       <defs>
@@ -99,47 +99,50 @@ export const FlowArrowsLayer: React.FC<FlowArrowsLayerProps> = React.memo(({
         let endY: number;
 
         if (sameRow) {
-          if (toBox.x >= fromBox.x) {
-            // Left-to-right forward connection in same row
+          const horizontalGap = toBox.x - (fromBox.x + fromBox.width);
+          const isAdjacentForward = toBox.x > fromBox.x && horizontalGap <= 240;
+
+          if (isAdjacentForward) {
+            // Directly adjacent neighbors in the same row: connect across the empty vertical alley
             startX = fromBox.x + fromBox.width;
             startY = fromBox.y + ARTBOARD_HEADER_OFFSET + fromBox.height * 0.45 + verticalSlot;
             endX = toBox.x;
             endY = toBox.y + ARTBOARD_HEADER_OFFSET + toBox.height * 0.36 + verticalSlot * 0.6;
-            const dx = Math.max(85, Math.abs(endX - startX) * 0.45);
+            const dx = Math.max(60, Math.abs(endX - startX) * 0.45);
             cp1X = startX + dx;
             cp1Y = startY;
             cp2X = endX - dx;
             cp2Y = endY;
           } else {
-            // Return loop arched smoothly in the horizontal alley underneath the row
+            // Non-adjacent or return in same row: arch cleanly inside the empty horizontal corridor below the row
             startX = fromBox.x + fromBox.width * 0.5 + horizontalSlot * 0.5;
             startY = fromBox.y + ARTBOARD_HEADER_OFFSET + fromBox.height;
             endX = toBox.x + toBox.width * 0.5 - horizontalSlot * 0.5;
             endY = toBox.y + ARTBOARD_HEADER_OFFSET + toBox.height;
-            const archDepth = 95 + (idx % 3) * 32;
+            const archDepth = 58 + (idx % 4) * 26;
             cp1X = startX;
             cp1Y = startY + archDepth;
             cp2X = endX;
             cp2Y = endY + archDepth;
           }
         } else if (toBox.y > fromBox.y) {
-          // Cross-row downward connection (Bottom of fromBox -> Top of toBox)
+          // Cross-row downward connection through the horizontal corridor between rows
           startX = fromBox.x + fromBox.width * 0.5 + horizontalSlot;
           startY = fromBox.y + ARTBOARD_HEADER_OFFSET + fromBox.height;
           endX = toBox.x + toBox.width * 0.5 + horizontalSlot * 0.6;
-          endY = toBox.y + ARTBOARD_HEADER_OFFSET;
-          const dy = Math.max(90, Math.abs(endY - startY) * 0.48);
+          endY = toBox.y;
+          const dy = Math.max(70, Math.min(140, Math.abs(endY - startY) * 0.45));
           cp1X = startX;
           cp1Y = startY + dy;
           cp2X = endX;
           cp2Y = endY - dy;
         } else {
-          // Cross-row upward return connection (Top of fromBox -> Bottom of toBox)
+          // Cross-row upward return connection through the horizontal corridor between rows
           startX = fromBox.x + fromBox.width * 0.5 + horizontalSlot;
-          startY = fromBox.y + ARTBOARD_HEADER_OFFSET;
+          startY = fromBox.y;
           endX = toBox.x + toBox.width * 0.5 + horizontalSlot * 0.6;
           endY = toBox.y + ARTBOARD_HEADER_OFFSET + toBox.height;
-          const dy = Math.max(90, Math.abs(startY - endY) * 0.48);
+          const dy = Math.max(70, Math.min(140, Math.abs(startY - endY) * 0.45));
           cp1X = startX;
           cp1Y = startY - dy;
           cp2X = endX;

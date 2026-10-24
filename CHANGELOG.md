@@ -2,6 +2,13 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.6.2] - 2026-10-24
+
+### Fixed
+- **Corridor-Routed Interconnection Wires Behind Artboard Layer (`src/canvas/FlowArrowsLayer.tsx`)**:
+  - Restored `<FlowArrowsLayer />` to `zIndex: 5` (below the `zIndex: 10` / `20` `<ScreenArtboard />` frames) so interconnection wires and badges never draw over any screen's UI.
+  - Updated same-row and cross-row Bezier routing to route non-adjacent same-row connections through the open horizontal corridor underneath the row (`58px–136px` arch depth) and adjacent connections through the open vertical alley between neighbor screens.
+
 ## [1.6.1] - 2026-10-24
 
 ### Security
