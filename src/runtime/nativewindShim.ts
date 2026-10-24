@@ -376,6 +376,7 @@ export function resolveTailwindClassNameToStyle(className?: string): Record<stri
     (typeof window !== 'undefined' && window.__ZELUNE_TAILWIND_THEME__) || {};
   const themeColors = (projectTheme.colors ?? {}) as Record<string, unknown>;
   const themeFontSizes = (projectTheme.fontSize ?? {}) as Record<string, unknown>;
+  const themeFontFamilies = (projectTheme.fontFamily ?? {}) as Record<string, unknown>;
   const themeRadii = (projectTheme.borderRadius ?? {}) as Record<string, unknown>;
   const themeSpacing = (projectTheme.spacing ?? {}) as Record<string, unknown>;
 
@@ -807,6 +808,30 @@ export function resolveTailwindClassNameToStyle(className?: string): Record<stri
     if (token === 'font-mono') {
       style.fontFamily = 'monospace';
       continue;
+    }
+    if (token.startsWith('font-')) {
+      const fontKey = token.slice(5);
+      const customFontEntry = themeFontFamilies[fontKey];
+      if (customFontEntry !== undefined) {
+        const primaryFont = Array.isArray(customFontEntry)
+          ? String(customFontEntry[0] ?? '')
+          : String(customFontEntry ?? '');
+        const lowerFont = primaryFont.toLowerCase();
+        if (lowerFont.includes('800') || lowerFont.includes('extrabold') || lowerFont.includes('black')) {
+          style.fontWeight = '800';
+        } else if (lowerFont.includes('700') || lowerFont.includes('bold')) {
+          style.fontWeight = lowerFont.includes('semibold') ? '600' : '700';
+        } else if (lowerFont.includes('600') || lowerFont.includes('semibold')) {
+          style.fontWeight = '600';
+        } else if (lowerFont.includes('500') || lowerFont.includes('medium')) {
+          style.fontWeight = '500';
+        } else if (lowerFont.includes('300') || lowerFont.includes('light')) {
+          style.fontWeight = '300';
+        } else {
+          style.fontWeight = '400';
+        }
+        continue;
+      }
     }
 
     // Letter spacing (tracking-*)

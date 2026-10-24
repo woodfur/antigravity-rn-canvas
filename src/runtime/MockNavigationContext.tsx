@@ -11,7 +11,7 @@ import {
   ScrollView as RNScrollView,
   FlatList as RNFlatList,
 } from 'react-native';
-import { withNativeWind } from './nativewindShim';
+import { withNativeWind, resolveTailwindClassNameToStyle } from './nativewindShim';
 
 export interface NavigationController {
   navigate: (targetRoute: string, params?: Record<string, unknown>) => void;
@@ -1220,6 +1220,53 @@ export const clsx = (...args: unknown[]) =>
   args.filter((a): a is string => typeof a === 'string' && a.length > 0).join(' ');
 export const cn = clsx;
 export const twMerge = clsx;
+
+// NativeWind (v2 / v4) & twrnc Universal Shims
+export function styled<P extends Record<string, unknown>>(
+  Component: React.ComponentType<P>,
+  baseClassName?: string
+): React.ComponentType<P> {
+  const Wrapped = withNativeWind(Component as unknown as React.ComponentType<Record<string, unknown>>);
+  if (!baseClassName) return Wrapped as unknown as React.ComponentType<P>;
+  return React.forwardRef<unknown, P>((props, ref) => {
+    const combinedClass = [baseClassName, props?.className].filter(Boolean).join(' ');
+    return React.createElement(Wrapped, { ...props, className: combinedClass, ref });
+  }) as unknown as React.ComponentType<P>;
+}
+
+export function cssInterop<P extends Record<string, unknown>>(
+  Component: React.ComponentType<P>
+): React.ComponentType<P> {
+  return withNativeWind(Component as unknown as React.ComponentType<Record<string, unknown>>) as unknown as React.ComponentType<P>;
+}
+
+export const remapProps = cssInterop;
+
+function twFn(stringsOrClass: TemplateStringsArray | string, ...values: unknown[]): Record<string, unknown> {
+  if (typeof stringsOrClass === 'string') {
+    return resolveTailwindClassNameToStyle(stringsOrClass) ?? {};
+  }
+  if (Array.isArray(stringsOrClass)) {
+    const built = stringsOrClass.reduce(
+      (acc, str, idx) => acc + str + (values[idx] !== undefined ? String(values[idx]) : ''),
+      ''
+    );
+    return resolveTailwindClassNameToStyle(built) ?? {};
+  }
+  return {};
+}
+
+twFn.style = (...args: unknown[]) => {
+  const mergedClass = args.filter((a): a is string => typeof a === 'string' && a.length > 0).join(' ');
+  return resolveTailwindClassNameToStyle(mergedClass) ?? {};
+};
+twFn.color = (token: string) => {
+  const s = resolveTailwindClassNameToStyle(`text-${token}`);
+  return (s?.color as string | undefined) ?? '#0F172A';
+};
+
+export const tw = twFn;
+export const createTw = () => twFn;
 
 // React Hook Form Shims (react-hook-form)
 export function useForm(config?: { defaultValues?: Record<string, unknown> }) {

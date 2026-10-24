@@ -2,6 +2,13 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.5.7] - 2026-10-24
+
+### Added
+- **Universal NativeWind v2/v4 (`styled`, `cssInterop`, `remapProps`), `twrnc` (`tw`, `createTw`), & TypeScript `tailwind.config.ts` Support (`src/runtime/nativewindShim.ts`, `src/runtime/MockNavigationContext.tsx`, `vite.config.ts`)**:
+  - Added `styled(Component, baseClassName)` (NativeWind v2), `cssInterop` / `remapProps` (NativeWind v4), and `tw` / `createTw` (`twrnc` tagged templates and `.style()` helper) to `MockNavigationContext.tsx` so any React Native project worldwide using NativeWind v2, NativeWind v4, or `twrnc` works out-of-the-box.
+  - Added dynamic `fontFamily` token resolution from `window.__ZELUNE_TAILWIND_THEME__.fontFamily` in `src/runtime/nativewindShim.ts` and TypeScript type-stripping (`const config: Config =`, `satisfies Config`, `as const`) in `loadProjectTailwindTheme` (`vite.config.ts`).
+
 ## [1.5.6] - 2026-10-24
 
 ### Added

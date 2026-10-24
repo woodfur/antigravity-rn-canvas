@@ -112,6 +112,9 @@ function loadProjectTailwindTheme(roots: string[]): Record<string, unknown> {
         const raw = fs.readFileSync(fullPath, 'utf-8');
         const cleaned = raw
           .replace(/^import\s+.*$/gm, '')
+          .replace(/\b(const|let|var)\s+([A-Za-z0-9_$]+)\s*:\s*[^=]+=/g, '$1 $2 =')
+          .replace(/\bsatisfies\s+[A-Za-z0-9_$.<>]+/g, '')
+          .replace(/\bas\s+const\b/g, '')
           .replace(/export\s+default\s+/, 'module.exports = ');
         const mod = { exports: {} as Record<string, unknown> };
         const fakeRequire = () => ({});
