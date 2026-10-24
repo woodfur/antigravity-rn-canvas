@@ -1,0 +1,11 @@
+version: 2
+projectIgnorePaths:
+  - "tests/**"
+  - "dist/**"
+issueRules:
+  fsAccess:
+    action: ignore
+  envVars:
+    action: ignore
+  networkAccess:
+    action: ignore

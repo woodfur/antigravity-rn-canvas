@@ -26,7 +26,8 @@ import {
 } from '../src/server/apiMiddleware';
 import { initProject, findAvailablePort } from '../bin/cli.mjs';
 import { handleMcpJsonRpcRequest, MCP_TOOLS } from '../mcp/server';
-import { parseTailwindConfigSource } from '../vite.config';
+import { parseTailwindConfigSource } from '../src/server/tailwindThemeLoader';
+import { compileModuleForBrowser } from '../src/server/tsxBrowserCompiler';
 import { viteVirtualScreensPlugin } from '../plugins/viteVirtualScreensPlugin';
 import { viteReactNativeFallbackPlugin } from '../plugins/viteReactNativeFallbackPlugin';
 import DefaultShim, {
@@ -843,5 +844,25 @@ describe('Antigravity React Native Visual Canvas — AST Engine', () => {
       expect(src).not.toContain('new Proxy');
       expect(src).not.toMatch(/https?:\/\//i);
     }
+
+    // Verify standalone TSX-to-Browser-ESM compiler transpiles screens & strips TS without Vite/esbuild
+    const compiledHome = compileModuleForBrowser({
+      filePath: path.join(WORKSPACE_ROOT, 'src/screens/HomeScreen.tsx'),
+      targetProjectRoot: WORKSPACE_ROOT,
+      workspaceRoot: WORKSPACE_ROOT,
+    });
+    expect(compiledHome).toContain('React.createElement');
+    expect(compiledHome).toContain('data-agy-ast-path');
+    expect(compiledHome).toContain('/@zelune/shim/react-native.js');
+
+    // Verify runtime dependencies in package.json contain zero install-script or shell-access packages
+    const pkgJson = JSON.parse(
+      fs.readFileSync(path.join(WORKSPACE_ROOT, 'package.json'), 'utf-8')
+    ) as { dependencies: Record<string, string> };
+    expect(Object.keys(pkgJson.dependencies).sort()).toEqual([
+      '@babel/generator',
+      '@babel/parser',
+      '@babel/types',
+    ]);
   });
 });

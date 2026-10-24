@@ -1,6 +1,6 @@
 {
   "name": "zelune",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "private": false,
   "license": "MIT",
   "type": "module",
@@ -29,17 +29,14 @@
   },
   "files": [
     "bin/",
-    "src/",
-    "plugins/",
-    "mcp/",
+    "dist/",
+    "mcp/server.mjs",
     "skills/",
     "rules/",
     "assets/",
-    "index.html",
-    "vite.config.ts",
-    "tsconfig.json",
     "plugin.json",
     "mcp_config.json",
+    "socket.yml",
     "PRODUCT.md",
     "DESIGN.md",
     "README.md",
@@ -49,7 +46,7 @@
     "dev": "vite --host 127.0.0.1 --port 5173",
     "zelune": "node ./bin/cli.mjs",
     "canvas": "node ./bin/cli.mjs",
-    "build": "vite build",
+    "build": "vite build --mode development",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "test": "vitest run",
     "mcp": "node ./bin/cli.mjs --mcp"
@@ -57,18 +54,18 @@
   "dependencies": {
     "@babel/generator": "^7.25.0",
     "@babel/parser": "^7.25.0",
-    "@babel/types": "^7.25.0",
-    "lucide-react": "^0.454.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "vite": "6.4.4"
+    "@babel/types": "^7.25.0"
   },
   "devDependencies": {
     "@types/babel__generator": "^7.6.8",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
+    "lucide-react": "^0.454.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "typescript": "^5.6.2",
+    "vite": "6.4.4",
     "vitest": "^2.1.2"
   }
 }

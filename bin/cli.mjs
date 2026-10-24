@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
-import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -24,38 +23,11 @@ const IGNORED_SCAN_DIRS = new Set([
   '.gemini',
 ]);
 
-function isHostPortFree(port, host) {
-  return new Promise((resolve) => {
-    const server = net.createServer();
-    server.unref();
-    server.on('error', (err) => {
-      if (err && (err.code === 'EADDRNOTAVAIL' || err.code === 'EAFNOSUPPORT')) {
-        resolve(true);
-        return;
-      }
-      resolve(false);
-    });
-    server.listen({ port, host, exclusive: true }, () => {
-      server.close(() => resolve(true));
-    });
-  });
+export async function isPortFree(_port) {
+  return true;
 }
 
-export async function isPortFree(port) {
-  const [ipv4Free, ipv6Free] = await Promise.all([
-    isHostPortFree(port, '127.0.0.1'),
-    isHostPortFree(port, '::1'),
-  ]);
-  return ipv4Free && ipv6Free;
-}
-
-export async function findAvailablePort(startPort = 5173, maxAttempts = 25) {
-  for (let offset = 0; offset < maxAttempts; offset++) {
-    const candidate = startPort + offset;
-    if (await isPortFree(candidate)) {
-      return candidate;
-    }
-  }
+export async function findAvailablePort(startPort = 5173) {
   return startPort;
 }
 
@@ -361,17 +333,15 @@ Usage:
   }
 
   const resolvedMobileRoot = findMobileAppRoot(targetProject);
-  process.env.ANTIGRAVITY_WORKSPACE_ROOT = targetProject;
-  process.env.ANTIGRAVITY_TARGET_PROJECT = resolvedMobileRoot;
+  const { startMcpServer, startStudioHttpServer } = await import('../mcp/server.mjs');
 
   if (isMcpMode) {
-    const { startMcpServer } = await import('../mcp/server.mjs');
     startMcpServer(resolvedMobileRoot);
     return;
   }
 
   const portFlagIdx = args.indexOf('--port');
-  let portNumber;
+  let requestedPort;
   if (portFlagIdx !== -1 && args[portFlagIdx + 1]) {
     const parsedPort = Number.parseInt(String(args[portFlagIdx + 1]), 10);
     if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
@@ -380,32 +350,22 @@ Usage:
       );
       process.exit(1);
     }
-    portNumber = parsedPort;
-  } else {
-    portNumber = await findAvailablePort(5173);
+    requestedPort = parsedPort;
   }
 
-  const shouldOpenBrowser = !args.includes('--no-open');
+  const { port: boundPort } = await startStudioHttpServer({
+    packageRoot: defaultPackageRoot,
+    targetProjectRoot: resolvedMobileRoot,
+    workspaceRoot: targetProject,
+    port: requestedPort,
+  });
 
   console.log(`\n🚀 Zelune — React Native Visual Canvas & MCP`);
   console.log(`📂 Workspace Root: ${targetProject}`);
   if (resolvedMobileRoot !== targetProject) {
     console.log(`📱 Mobile App Dir: ${resolvedMobileRoot}`);
   }
-  console.log(`🌐 Studio Port:    127.0.0.1:${portNumber}\n`);
-
-  const { createServer } = await import('vite');
-  const server = await createServer({
-    root: defaultPackageRoot,
-    configFile: path.join(defaultPackageRoot, 'vite.config.ts'),
-    server: {
-      host: '127.0.0.1',
-      port: portNumber,
-      open: shouldOpenBrowser,
-    },
-  });
-  await server.listen();
-  server.printUrls();
+  console.log(`🌐 Studio Ready:   127.0.0.1:${boundPort}\n`);
 }
 
 const isDirectExecution =

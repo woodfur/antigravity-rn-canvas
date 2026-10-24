@@ -13,33 +13,6 @@ import {
 } from 'react-native';
 import { withNativeWind, resolveTailwindClassNameToStyle } from './nativewindShim';
 
-declare global {
-  interface Window {
-    __ZELUNE_PUBLIC_ENV__?: Record<string, string>;
-  }
-}
-
-if (typeof window !== 'undefined') {
-  const baseEnv: Record<string, string> = window.__ZELUNE_PUBLIC_ENV__ ?? {
-    NODE_ENV: 'development',
-    EXPO_PUBLIC_PLATFORM: 'web',
-  };
-
-  const win = window as unknown as Record<string, unknown>;
-  win.global = window;
-  win.__DEV__ = true;
-  if (!win.process || typeof win.process !== 'object') {
-    win.process = {
-      env: baseEnv,
-      platform: 'browser',
-      version: '',
-      cwd: () => '/',
-    };
-  } else {
-    (win.process as Record<string, unknown>).env = baseEnv;
-  }
-}
-
 export interface NavigationController {
   navigate: (targetRoute: string, params?: Record<string, unknown>) => void;
   goBack: () => void;
@@ -664,11 +637,8 @@ export const Pattern = createSvgDomElement('pattern');
 export const Mask = createSvgDomElement('mask');
 export const ForeignObject = createSvgDomElement('foreignObject');
 export const SvgXml: React.FC<{ xml?: string; width?: number | string; height?: number | string }> =
-  ({ xml = '', width = 24, height = 24 }) => (
-    <span
-      style={{ display: 'inline-flex', width, height }}
-      dangerouslySetInnerHTML={{ __html: xml }}
-    />
+  ({ width = 24, height = 24 }) => (
+    <svg width={width} height={height} viewBox="0 0 24 24" style={{ display: 'inline-flex' }} />
   );
 export const SvgUri: React.FC<{ uri?: string; width?: number; height?: number }> = ({
   uri,

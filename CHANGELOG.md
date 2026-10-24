@@ -2,6 +2,14 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.6.4] - 2026-10-24
+
+### Security
+- **Standalone Node.js Studio HTTP + TSX Browser Compiler & Complete `vite`/`esbuild` Runtime Decoupling (`src/server/studioHttpServer.ts`, `src/server/tsxBrowserCompiler.ts`, `src/server/tailwindThemeLoader.ts`, `bin/cli.mjs`, `mcp/server.ts`, `package.json`, `socket.yml`, `.github/workflows/publish.yml`)**:
+  - **Removed `vite`, `react`, `react-dom`, and `lucide-react` from Runtime `"dependencies"`**: Added a built-in Node.js `node:http` Studio server (`startStudioHttpServer`) and an on-the-fly `@babel/parser` + `@babel/generator` TSX/TS/JSX browser ES module compiler (`compileModuleForBrowser`), reducing runtime `"dependencies"` in `package.json` to only `@babel/parser`, `@babel/generator`, and `@babel/types` (10 pure-JS packages total). This completely eliminates `esbuild` and `fsevents` (`Install scripts`, `Shell access`, `Uses eval`, `Dynamic require`, `Network access`, and `Minified code`) from `zelune`'s dependency tree.
+  - **Unminified Studio Build & Zero `.env` / `node:net` / `dangerouslySetInnerHTML` Triggers (`vite.config.ts`, `src/runtime/MockNavigationContext.tsx`, `bin/cli.mjs`)**: Removed `loadEnv` `.env` file harvesting, `window.process` mutation, `dangerouslySetInnerHTML`, and `node:net` raw socket probing, and configured `vite build --mode development` with `minify: false` so all shipped assets in `dist/` and `mcp/server.mjs` are 100% unminified.
+  - **Added `socket.yml` & GitHub Actions OIDC Provenance Workflow (`.github/workflows/publish.yml`)**: Added a root `socket.yml` manifest and an automated `npm publish --provenance --access public` GitHub Actions workflow (`id-token: write`).
+
 ## [1.6.3] - 2026-10-24
 
 ### Security

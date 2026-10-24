@@ -13,6 +13,7 @@ import {
   type InsertElementPreset,
   type StyleValue,
 } from '../src/server/astEngine.js';
+export { startStudioHttpServer } from '../src/server/studioHttpServer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_WORKSPACE_ROOT = path.resolve(__dirname, '..');
@@ -324,7 +325,7 @@ export async function handleMcpJsonRpcRequest(
           },
           serverInfo: {
             name: 'zelune',
-            version: '1.6.3',
+            version: '1.6.4',
           },
         },
       };

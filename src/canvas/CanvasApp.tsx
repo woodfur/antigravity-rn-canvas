@@ -243,6 +243,9 @@ export const CanvasApp: React.FC = () => {
       };
 
       if (screensJson.ok) {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('zelune:reload-screens'));
+        }
         if (screensJson.projectName) {
           setProjectName(screensJson.projectName);
         }
