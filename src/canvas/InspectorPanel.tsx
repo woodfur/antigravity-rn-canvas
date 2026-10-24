@@ -11,20 +11,114 @@ import {
   Sliders,
   X,
   PanelRightClose,
+  Plus,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  LayoutTemplate,
+  MousePointerClick,
+  FormInput,
+  Tag,
+  Minus,
+  Columns,
+  Heading,
+  AlignLeft,
 } from 'lucide-react';
-import type { InspectedElement, PatchPayload, StyleValue } from '../server/astEngine';
+import type {
+  InspectedElement,
+  PatchPayload,
+  ReorderPayload,
+  InsertElementPayload,
+  InsertElementPreset,
+  DuplicateElementPayload,
+  DeleteElementPayload,
+  ScreenMetadata,
+  StyleValue,
+} from '../server/astEngine';
 
 interface InspectorPanelProps {
   inspected: InspectedElement | null;
+  screens?: ScreenMetadata[];
+  activeScreenId?: string | null;
   isOpen: boolean;
   isLoading: boolean;
   isSaving: boolean;
   statusMessage: string | null;
   onPatch: (payload: PatchPayload) => Promise<void>;
+  onInsert?: (payload: InsertElementPayload) => Promise<void>;
+  onDuplicate?: (payload: DuplicateElementPayload) => Promise<void>;
+  onDelete?: (payload: DeleteElementPayload) => Promise<void>;
+  onReorder?: (payload: ReorderPayload) => Promise<void>;
+  onSelectScreen?: (screenId: string) => void;
   onClearSelection: () => void;
   onCollapse: () => void;
   onJumpToScreen: (routeName: string) => void;
 }
+
+const INSERT_PRESETS: Array<{
+  id: InsertElementPreset;
+  title: string;
+  subtitle: string;
+  tagBadge: string;
+  icon: React.ComponentType<{ size?: number; color?: string }>;
+}> = [
+  {
+    id: 'button',
+    title: 'Button',
+    subtitle: 'CTA + Optional Flow',
+    tagBadge: '<TouchableOpacity>',
+    icon: MousePointerClick,
+  },
+  {
+    id: 'section',
+    title: 'Section Card',
+    subtitle: 'Title + Body Card',
+    tagBadge: '<View>',
+    icon: LayoutTemplate,
+  },
+  {
+    id: 'row',
+    title: 'Row Item',
+    subtitle: 'Horizontal Flex Row',
+    tagBadge: '<View row>',
+    icon: Columns,
+  },
+  {
+    id: 'heading',
+    title: 'Heading',
+    subtitle: 'Bold Title Copy',
+    tagBadge: '<Text>',
+    icon: Heading,
+  },
+  {
+    id: 'text',
+    title: 'Paragraph',
+    subtitle: 'Supporting Copy',
+    tagBadge: '<Text>',
+    icon: AlignLeft,
+  },
+  {
+    id: 'input',
+    title: 'Text Input',
+    subtitle: 'Form Input Field',
+    tagBadge: '<TextInput>',
+    icon: FormInput,
+  },
+  {
+    id: 'badge',
+    title: 'Badge Pill',
+    subtitle: 'Status Tag Pill',
+    tagBadge: '<View>',
+    icon: Tag,
+  },
+  {
+    id: 'divider',
+    title: 'Divider',
+    subtitle: '1px Hairline Rule',
+    tagBadge: '<View>',
+    icon: Minus,
+  },
+];
 
 const COLOR_SWATCHES = [
   '#0A0B0E',
@@ -42,11 +136,18 @@ const FONT_WEIGHTS = ['400', '500', '600', '700', '800'];
 
 export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   inspected,
+  screens = [],
+  activeScreenId = null,
   isOpen,
   isLoading,
   isSaving,
   statusMessage,
   onPatch,
+  onInsert,
+  onDuplicate,
+  onDelete,
+  onReorder,
+  onSelectScreen,
   onClearSelection,
   onCollapse,
   onJumpToScreen,
@@ -56,8 +157,257 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   const [agentInstruction, setAgentInstruction] = useState('');
   const [copiedPrompt, setCopiedPrompt] = useState(false);
 
+  // Add Component / Section builder state
+  const [showInsertDrawer, setShowInsertDrawer] = useState(false);
+  const [insertPlacement, setInsertPlacement] = useState<'after' | 'before' | 'inside'>('after');
+  const [insertLabel, setInsertLabel] = useState('');
+  const [insertNavigateTo, setInsertNavigateTo] = useState('');
+
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const debounceTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const handleOpenInsert = () => {
+      setShowInsertDrawer(true);
+    };
+    window.addEventListener('zelune:open-insert-palette', handleOpenInsert);
+    return () => window.removeEventListener('zelune:open-insert-palette', handleOpenInsert);
+  }, []);
+
+  const activeScreenObj =
+    screens.find((s) => s.id === activeScreenId) ?? screens[0] ?? null;
+
+  const handleTriggerInsert = (preset: InsertElementPreset) => {
+    if (!onInsert) return;
+    const targetFile = inspected?.file ?? activeScreenObj?.filePath;
+    if (!targetFile) return;
+
+    void onInsert({
+      file: targetFile,
+      astPath: inspected?.astPath,
+      placement: inspected ? insertPlacement : 'inside',
+      preset,
+      label: insertLabel.trim() || undefined,
+      navigateTo: preset === 'button' && insertNavigateTo ? insertNavigateTo : undefined,
+    });
+    setInsertLabel('');
+  };
+
+  const renderInsertPaletteContent = (isCompactDrawer: boolean) => (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        padding: isCompactDrawer ? 12 : 0,
+        backgroundColor: isCompactDrawer ? 'var(--studio-surface-2)' : 'transparent',
+        borderRadius: isCompactDrawer ? 9 : 0,
+        border: isCompactDrawer ? '1px solid rgba(56, 189, 248, 0.3)' : 'none',
+      }}
+    >
+      {/* Target Screen or Placement Selector */}
+      {inspected ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <label
+            style={{
+              fontSize: 10,
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 600,
+              color: 'var(--studio-text-muted)',
+              letterSpacing: '0.05em',
+            }}
+          >
+            PLACEMENT RELATIVE TO &lt;{inspected.tagName}&gt;
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+            {(['after', 'before', 'inside'] as const).map((place) => (
+              <button
+                key={place}
+                type="button"
+                className="zelune-interactive"
+                onClick={() => setInsertPlacement(place)}
+                style={{
+                  padding: '5px 6px',
+                  borderRadius: 6,
+                  border:
+                    insertPlacement === place
+                      ? '1px solid #38BDF8'
+                      : '1px solid var(--studio-border-subtle)',
+                  backgroundColor:
+                    insertPlacement === place
+                      ? 'rgba(56, 189, 248, 0.14)'
+                      : 'var(--studio-surface-1)',
+                  color:
+                    insertPlacement === place
+                      ? 'var(--studio-text-primary)'
+                      : 'var(--studio-text-secondary)',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  fontFamily: 'var(--font-mono)',
+                  textTransform: 'capitalize',
+                  cursor: 'pointer',
+                }}
+              >
+                {place}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        screens.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label
+              style={{
+                fontSize: 10,
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 600,
+                color: 'var(--studio-text-muted)',
+                letterSpacing: '0.05em',
+              }}
+            >
+              TARGET ARTBOARD SCREEN
+            </label>
+            <select
+              value={activeScreenObj?.id ?? ''}
+              onChange={(e) => onSelectScreen?.(e.target.value)}
+              style={{
+                padding: '7px 9px',
+                borderRadius: 7,
+                border: '1px solid var(--studio-border-subtle)',
+                backgroundColor: 'var(--studio-surface-2)',
+                color: 'var(--studio-text-primary)',
+                fontSize: 12,
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
+              {screens.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({s.filePath})
+                </option>
+              ))}
+            </select>
+          </div>
+        )
+      )}
+
+      {/* Optional Custom Label & Navigation Link */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label
+            style={{
+              fontSize: 10,
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--studio-text-muted)',
+            }}
+          >
+            CUSTOM LABEL / COPY
+          </label>
+          <input
+            type="text"
+            value={insertLabel}
+            onChange={(e) => setInsertLabel(e.target.value)}
+            placeholder="e.g. Book Now"
+            style={{
+              padding: '6px 8px',
+              borderRadius: 6,
+              border: '1px solid var(--studio-border-subtle)',
+              backgroundColor: 'var(--studio-surface-1)',
+              color: 'var(--studio-text-primary)',
+              fontSize: 11.5,
+            }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label
+            style={{
+              fontSize: 10,
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--studio-text-muted)',
+            }}
+          >
+            BUTTON FLOW LINK
+          </label>
+          <select
+            value={insertNavigateTo}
+            onChange={(e) => setInsertNavigateTo(e.target.value)}
+            style={{
+              padding: '6px 7px',
+              borderRadius: 6,
+              border: '1px solid var(--studio-border-subtle)',
+              backgroundColor: 'var(--studio-surface-1)',
+              color: 'var(--studio-text-primary)',
+              fontSize: 11.5,
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
+            <option value="">None</option>
+            {screens.map((s) => (
+              <option key={s.id} value={s.id}>
+                → {s.id}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* 2-Column Component Preset Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 7 }}>
+        {INSERT_PRESETS.map((preset) => {
+          const IconComp = preset.icon;
+          return (
+            <button
+              key={preset.id}
+              type="button"
+              className="zelune-interactive"
+              disabled={isSaving}
+              onClick={() => handleTriggerInsert(preset.id)}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: 4,
+                padding: '9px 10px',
+                borderRadius: 8,
+                border: '1px solid var(--studio-border-subtle)',
+                backgroundColor: 'var(--studio-surface-1)',
+                color: 'var(--studio-text-primary)',
+                cursor: isSaving ? 'wait' : 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  width: '100%',
+                }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600 }}>
+                  <IconComp size={13} color="#38BDF8" />
+                  <span>{preset.title}</span>
+                </span>
+                <Plus size={11} color="var(--studio-text-muted)" />
+              </div>
+              <span style={{ fontSize: 10.5, color: 'var(--studio-text-secondary)' }}>
+                {preset.subtitle}
+              </span>
+              <span
+                style={{
+                  fontSize: 9.5,
+                  fontFamily: 'var(--font-mono)',
+                  color: '#6366F1',
+                }}
+              >
+                {preset.tagBadge}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 
   useEffect(() => {
     if (!inspected) {
@@ -233,41 +583,54 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 backgroundColor: 'var(--studio-surface-2)',
                 border: '1px solid var(--studio-border-hairline)',
                 borderRadius: 10,
-                padding: 14,
-                fontSize: 12.5,
-                lineHeight: 1.6,
+                padding: 12,
+                fontSize: 12,
+                lineHeight: 1.5,
               }}
             >
-              Select any node on a <code style={{ color: '#0284C7', fontFamily: 'var(--font-mono)' }}>393 × 852</code>{' '}
-              artboard to inspect and live-patch its{' '}
-              <strong style={{ color: 'var(--studio-text-primary)' }}>StyleSheet.create</strong> rules or{' '}
-              <strong style={{ color: 'var(--studio-text-primary)' }}>static copy</strong> directly in the{' '}
-              <code style={{ color: '#6366F1', fontFamily: 'var(--font-mono)' }}>.tsx</code> AST.
+              Select any node on an artboard to inspect &amp; live-patch its{' '}
+              <strong style={{ color: 'var(--studio-text-primary)' }}>StyleSheet</strong> or{' '}
+              <strong style={{ color: 'var(--studio-text-primary)' }}>copy</strong>, or add new
+              buttons, sections, and inputs below:
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+            {(isSaving || statusMessage) && (
               <div
                 style={{
+                  padding: '7px 12px',
+                  backgroundColor: 'var(--studio-badge-indigo-bg)',
+                  border: '1px solid var(--studio-badge-indigo-border)',
+                  borderRadius: 7,
+                  fontSize: 11,
+                  fontFamily: 'var(--font-mono)',
+                  color: 'var(--studio-badge-indigo-text)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <span>{isSaving ? 'Writing AST to .tsx...' : statusMessage}</span>
+                <span style={{ color: 'var(--studio-accent-emerald)', fontWeight: 600 }}>● Sync</span>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
                   fontSize: 10.5,
                   fontFamily: 'var(--font-mono)',
                   fontWeight: 600,
-                  color: 'var(--studio-text-muted)',
+                  color: '#38BDF8',
                   letterSpacing: '0.06em',
                 }}
               >
-                DESIGN &amp; SYNC GOVERNANCE
+                <Plus size={12} color="#38BDF8" />
+                <span>ADD ELEMENTS &amp; SECTIONS</span>
               </div>
-              <div style={{ fontSize: 12, color: 'var(--studio-text-secondary)', lineHeight: 1.5 }}>
-                • <strong style={{ color: 'var(--studio-text-primary)' }}>Tier 1 (Surgical AST)</strong>: Instant write-back to colors, typography, spacing, and copy.
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--studio-text-secondary)', lineHeight: 1.5 }}>
-                • <strong style={{ color: 'var(--studio-text-primary)' }}>Tier 2 (Antigravity Bridge)</strong>: Dispatch structural refactors with exact file &amp; AST path coordinates.
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--studio-text-secondary)', lineHeight: 1.5 }}>
-                • <strong style={{ color: 'var(--studio-text-primary)' }}>Impeccable &amp; Taste Guardrails</strong>: Governed by{' '}
-                <code style={{ fontFamily: 'var(--font-mono)', color: '#0284C7' }}>PRODUCT.md</code> &amp;{' '}
-                <code style={{ fontFamily: 'var(--font-mono)', color: '#0284C7' }}>DESIGN.md</code>.
-              </div>
+              {renderInsertPaletteContent(false)}
             </div>
           </div>
 
@@ -417,6 +780,149 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               <span style={{ color: 'var(--studio-accent-emerald)', fontWeight: 600 }}>● AST Sync</span>
             </div>
           )}
+
+          {/* Structural Element Action Bar: + Add Element, Duplicate, Reorder Up/Down, Delete */}
+          <div
+            style={{
+              padding: '8px 14px',
+              borderBottom: '1px solid var(--studio-border-hairline)',
+              backgroundColor: 'var(--studio-surface-1)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 5 }}>
+              <button
+                type="button"
+                className="zelune-interactive"
+                onClick={() => setShowInsertDrawer((prev) => !prev)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '5px 9px',
+                  borderRadius: 6,
+                  border: showInsertDrawer
+                    ? '1px solid #38BDF8'
+                    : '1px solid rgba(56, 189, 248, 0.35)',
+                  backgroundColor: showInsertDrawer
+                    ? 'rgba(56, 189, 248, 0.18)'
+                    : 'rgba(56, 189, 248, 0.08)',
+                  color: '#38BDF8',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <Plus size={12} />
+                <span>Add Element</span>
+              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <button
+                  type="button"
+                  className="zelune-interactive"
+                  disabled={isSaving || inspected.astPath === '0'}
+                  onClick={() =>
+                    onDuplicate?.({ file: inspected.file, astPath: inspected.astPath })
+                  }
+                  title="Duplicate Selected Element"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '5px 7px',
+                    borderRadius: 6,
+                    border: '1px solid var(--studio-border-subtle)',
+                    backgroundColor: 'var(--studio-surface-2)',
+                    color: 'var(--studio-text-secondary)',
+                    fontSize: 11,
+                    cursor: inspected.astPath === '0' ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  <Copy size={11} />
+                  <span>Clone</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="zelune-interactive"
+                  disabled={isSaving || inspected.astPath === '0'}
+                  onClick={() =>
+                    onReorder?.({
+                      file: inspected.file,
+                      astPath: inspected.astPath,
+                      direction: 'up',
+                    })
+                  }
+                  title="Move Element Up"
+                  style={{
+                    padding: '5px 6px',
+                    borderRadius: 6,
+                    border: '1px solid var(--studio-border-subtle)',
+                    backgroundColor: 'var(--studio-surface-2)',
+                    color: 'var(--studio-text-secondary)',
+                    cursor: inspected.astPath === '0' ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <ArrowUp size={12} />
+                </button>
+
+                <button
+                  type="button"
+                  className="zelune-interactive"
+                  disabled={isSaving || inspected.astPath === '0'}
+                  onClick={() =>
+                    onReorder?.({
+                      file: inspected.file,
+                      astPath: inspected.astPath,
+                      direction: 'down',
+                    })
+                  }
+                  title="Move Element Down"
+                  style={{
+                    padding: '5px 6px',
+                    borderRadius: 6,
+                    border: '1px solid var(--studio-border-subtle)',
+                    backgroundColor: 'var(--studio-surface-2)',
+                    color: 'var(--studio-text-secondary)',
+                    cursor: inspected.astPath === '0' ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <ArrowDown size={12} />
+                </button>
+
+                <button
+                  type="button"
+                  className="zelune-interactive"
+                  disabled={isSaving || inspected.astPath === '0'}
+                  onClick={() =>
+                    onDelete?.({ file: inspected.file, astPath: inspected.astPath })
+                  }
+                  title="Delete Element from .tsx (Cmd+Z to Undo)"
+                  style={{
+                    padding: '5px 6px',
+                    borderRadius: 6,
+                    border: '1px solid rgba(244, 63, 94, 0.35)',
+                    backgroundColor: 'rgba(244, 63, 94, 0.1)',
+                    color: '#F43F5E',
+                    cursor: inspected.astPath === '0' ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            </div>
+
+            {showInsertDrawer && renderInsertPaletteContent(true)}
+          </div>
 
           {/* Navigation Flow Link Banner if element triggers navigation */}
           {inspected.navigationTarget && (

@@ -2,6 +2,14 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.6.0] - 2026-10-24
+
+### Added
+- **Visual Component & Section Insertion Engine (`src/server/astEngine.ts`, `src/server/apiMiddleware.ts`, `src/canvas/InspectorPanel.tsx`, `src/canvas/CanvasApp.tsx`, `mcp/server.ts`)**:
+  - Added `insertElement`, `duplicateElement`, and `deleteElement` AST mutations (`POST /api/insert`, `POST /api/duplicate`, `POST /api/delete`, plus MCP tools `insert_screen_element`, `duplicate_screen_element`, `delete_screen_element`) with full `Cmd+Z` Undo / `Cmd+Shift+Z` Redo history.
+  - Added 8 one-click React Native component presets in the Studio Inspector & Top Bar (`+ Add Element`): **Button** (`<TouchableOpacity>` with optional screen navigation flow link), **Section Card** (`<View>` card with title + body), **Row Item** (horizontal `<View>`), **Heading** (`<Text>`), **Paragraph** (`<Text>`), **Text Input** (`<TextInput>`), **Badge Pill** (`<View>` + `<Text>`), and **Divider** (`<View>`).
+  - Automatically injects missing `react-native` named imports (`TouchableOpacity`, `TextInput`, `View`, `Text`) into the screen's `.tsx` file and supports inserting **After**, **Before**, or **Inside** any selected element (or directly into the active screen's main container when no element is selected), plus one-click **Clone**, **Move Up/Down**, and **Delete** actions.
+
 ## [1.5.8] - 2026-10-24
 
 ### Fixed

@@ -12,6 +12,9 @@ import {
   inspectElement,
   patchElement,
   reorderElement,
+  insertElement,
+  duplicateElement,
+  deleteElement,
   undoLastPatch,
   redoLastPatch,
   resolveSafeScreenPath,
@@ -650,6 +653,81 @@ describe('Antigravity React Native Visual Canvas — AST Engine', () => {
       const dealerTargets = byId.DealerDetails.outgoingFlows.map((f) => f.toScreen);
       expect(dealerTargets).toContain('Marketplace');
       expect(byId.DealerDetails.outgoingFlows.some((f) => f.id.includes(':return'))).toBe(true);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('inserts new buttons, sections, and inputs with auto-imports, duplicates, deletes, and undoes cleanly', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zelune-insert-'));
+    try {
+      const screensDir = path.join(tmpDir, 'src', 'screens');
+      fs.mkdirSync(screensDir, { recursive: true });
+      const screenFile = path.join(screensDir, 'DashboardScreen.tsx');
+      const baselineCode = [
+        "import React from 'react';",
+        "import { View, Text } from 'react-native';",
+        'export default function DashboardScreen({ navigation }: any) {',
+        '  return (',
+        '    <View>',
+        '      <Text>Dashboard Overview</Text>',
+        '    </View>',
+        '  );',
+        '}',
+        '',
+      ].join('\n');
+      fs.writeFileSync(screenFile, baselineCode, 'utf-8');
+
+      // 1. Insert a Button with navigation target 'Wallet' after <Text> (astPath '1')
+      const insertedBtn = await insertElement(tmpDir, {
+        file: 'src/screens/DashboardScreen.tsx',
+        astPath: '1',
+        placement: 'after',
+        preset: 'button',
+        label: 'Open Wallet',
+        navigateTo: 'Wallet',
+      });
+      expect(insertedBtn.element.tagName).toBe('TouchableOpacity');
+      expect(insertedBtn.element.navigationTarget).toBe('Wallet');
+
+      // Verify TouchableOpacity was automatically added to `import { ... } from 'react-native'`
+      const afterBtnCode = fs.readFileSync(screenFile, 'utf-8');
+      expect(afterBtnCode).toContain('TouchableOpacity');
+      expect(afterBtnCode).toMatch(/navigation\.navigate\(['"]Wallet['"]\)/);
+
+      // 2. Insert a Section Card inside root <View> (astPath '0')
+      const insertedSection = await insertElement(tmpDir, {
+        file: 'src/screens/DashboardScreen.tsx',
+        astPath: '0',
+        placement: 'inside',
+        preset: 'section',
+        label: 'Analytics Summary',
+      });
+      expect(insertedSection.element.tagName).toBe('View');
+      expect(fs.readFileSync(screenFile, 'utf-8')).toContain('Analytics Summary');
+
+      // 3. Insert a TextInput (auto-imports TextInput from 'react-native')
+      const insertedInput = await insertElement(tmpDir, {
+        file: 'src/screens/DashboardScreen.tsx',
+        preset: 'input',
+        label: 'Search metrics...',
+      });
+      expect(insertedInput.element.tagName).toBe('TextInput');
+      expect(fs.readFileSync(screenFile, 'utf-8')).toContain('TextInput');
+
+      // 4. Duplicate the TextInput
+      const duplicated = await duplicateElement(tmpDir, {
+        file: 'src/screens/DashboardScreen.tsx',
+        astPath: insertedInput.element.astPath,
+      });
+      expect(duplicated.element.tagName).toBe('TextInput');
+
+      // 5. Delete the duplicated TextInput
+      const deleted = await deleteElement(tmpDir, {
+        file: 'src/screens/DashboardScreen.tsx',
+        astPath: duplicated.element.astPath,
+      });
+      expect(deleted.deletedAstPath).toBe(duplicated.element.astPath);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

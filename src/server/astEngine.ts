@@ -63,6 +63,35 @@ export interface ReorderPayload {
   direction?: 'up' | 'down';
 }
 
+export type InsertElementPreset =
+  | 'button'
+  | 'section'
+  | 'row'
+  | 'heading'
+  | 'text'
+  | 'input'
+  | 'badge'
+  | 'divider';
+
+export interface InsertElementPayload {
+  file: string;
+  astPath?: string;
+  placement?: 'inside' | 'after' | 'before';
+  preset: InsertElementPreset;
+  label?: string;
+  navigateTo?: string;
+}
+
+export interface DuplicateElementPayload {
+  file: string;
+  astPath: string;
+}
+
+export interface DeleteElementPayload {
+  file: string;
+  astPath: string;
+}
+
 interface HistoryEntry {
   file: string;
   previousContent: string;
@@ -1654,6 +1683,800 @@ export async function reorderElement(
 
     return {
       element: updatedElement,
+      undoAvailable: undoStack.length,
+      redoAvailable: redoStack.length,
+    };
+  });
+}
+
+const CONTAINER_TAG_NAMES = new Set([
+  'View',
+  'ScrollView',
+  'SafeAreaView',
+  'KeyboardAvoidingView',
+  'Pressable',
+  'TouchableOpacity',
+  'ImageBackground',
+]);
+
+function buildStyleObjectExpression(styles: Record<string, string | number>): t.ObjectExpression {
+  return t.objectExpression(
+    Object.entries(styles).map(([k, v]) =>
+      t.objectProperty(
+        t.identifier(k),
+        typeof v === 'number' ? t.numericLiteral(v) : t.stringLiteral(v)
+      )
+    )
+  );
+}
+
+function buildInlineStyleAttr(styles: Record<string, string | number>): t.JSXAttribute {
+  return t.jsxAttribute(
+    t.jsxIdentifier('style'),
+    t.jsxExpressionContainer(buildStyleObjectExpression(styles))
+  );
+}
+
+function ensureReactNativeImports(ast: t.File, requiredComponents: string[]): void {
+  const needed = new Set(requiredComponents);
+  if (needed.size === 0) return;
+
+  let rnImportDecl: t.ImportDeclaration | null = null;
+  for (const stmt of ast.program.body) {
+    if (
+      t.isImportDeclaration(stmt) &&
+      stmt.source.value === 'react-native' &&
+      stmt.importKind !== 'type'
+    ) {
+      rnImportDecl = stmt;
+      break;
+    }
+  }
+
+  if (rnImportDecl) {
+    const existing = new Set<string>();
+    for (const spec of rnImportDecl.specifiers) {
+      if (t.isImportSpecifier(spec)) {
+        const importedName = t.isIdentifier(spec.imported)
+          ? spec.imported.name
+          : spec.imported.value;
+        existing.add(importedName);
+        existing.add(spec.local.name);
+      }
+    }
+    for (const comp of needed) {
+      if (!existing.has(comp)) {
+        rnImportDecl.specifiers.push(
+          t.importSpecifier(t.identifier(comp), t.identifier(comp))
+        );
+      }
+    }
+  } else {
+    const specifiers = Array.from(needed).map((comp) =>
+      t.importSpecifier(t.identifier(comp), t.identifier(comp))
+    );
+    ast.program.body.unshift(
+      t.importDeclaration(specifiers, t.stringLiteral('react-native'))
+    );
+  }
+}
+
+function buildPresetJsxElement(
+  preset: InsertElementPreset,
+  options: {
+    label?: string;
+    navigateTo?: string;
+    hasNavigationInScope: boolean;
+    hasRouterInScope: boolean;
+  }
+): { element: t.JSXElement; requiredImports: string[] } {
+  const cleanLabel = (options.label ?? '').trim();
+  const cleanNav = (options.navigateTo ?? '').trim();
+
+  switch (preset) {
+    case 'button': {
+      const btnText = cleanLabel || (cleanNav ? `Go to ${cleanNav}` : 'Continue');
+      const attrs: t.JSXAttribute[] = [
+        t.jsxAttribute(
+          t.jsxIdentifier('activeOpacity'),
+          t.jsxExpressionContainer(t.numericLiteral(0.8))
+        ),
+        buildInlineStyleAttr({
+          backgroundColor: '#0F3460',
+          paddingVertical: 14,
+          paddingHorizontal: 20,
+          borderRadius: 12,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginTop: 12,
+        }),
+      ];
+
+      if (cleanNav) {
+        if (options.hasNavigationInScope) {
+          attrs.push(
+            t.jsxAttribute(
+              t.jsxIdentifier('onPress'),
+              t.jsxExpressionContainer(
+                t.arrowFunctionExpression(
+                  [],
+                  t.callExpression(
+                    t.memberExpression(t.identifier('navigation'), t.identifier('navigate')),
+                    [t.stringLiteral(cleanNav)]
+                  )
+                )
+              )
+            )
+          );
+        } else if (options.hasRouterInScope) {
+          attrs.push(
+            t.jsxAttribute(
+              t.jsxIdentifier('onPress'),
+              t.jsxExpressionContainer(
+                t.arrowFunctionExpression(
+                  [],
+                  t.callExpression(
+                    t.memberExpression(t.identifier('router'), t.identifier('push')),
+                    [t.stringLiteral(`/${cleanNav.toLowerCase()}`)]
+                  )
+                )
+              )
+            )
+          );
+        } else {
+          attrs.push(t.jsxAttribute(t.jsxIdentifier('route'), t.stringLiteral(cleanNav)));
+        }
+      }
+
+      const textChild = t.jsxElement(
+        t.jsxOpeningElement(
+          t.jsxIdentifier('Text'),
+          [
+            buildInlineStyleAttr({
+              color: '#FFFFFF',
+              fontSize: 14,
+              fontWeight: '700',
+            }),
+          ],
+          false
+        ),
+        t.jsxClosingElement(t.jsxIdentifier('Text')),
+        [t.jsxText(btnText)],
+        false
+      );
+
+      return {
+        element: t.jsxElement(
+          t.jsxOpeningElement(t.jsxIdentifier('TouchableOpacity'), attrs, false),
+          t.jsxClosingElement(t.jsxIdentifier('TouchableOpacity')),
+          [textChild],
+          false
+        ),
+        requiredImports: ['TouchableOpacity', 'Text'],
+      };
+    }
+
+    case 'section': {
+      const sectionTitle = cleanLabel || 'Featured Section';
+      const titleNode = t.jsxElement(
+        t.jsxOpeningElement(
+          t.jsxIdentifier('Text'),
+          [
+            buildInlineStyleAttr({
+              fontSize: 16,
+              fontWeight: '700',
+              color: '#0F172A',
+              marginBottom: 4,
+            }),
+          ],
+          false
+        ),
+        t.jsxClosingElement(t.jsxIdentifier('Text')),
+        [t.jsxText(sectionTitle)],
+        false
+      );
+
+      const subtitleNode = t.jsxElement(
+        t.jsxOpeningElement(
+          t.jsxIdentifier('Text'),
+          [
+            buildInlineStyleAttr({
+              fontSize: 13,
+              lineHeight: 19,
+              color: '#64748B',
+            }),
+          ],
+          false
+        ),
+        t.jsxClosingElement(t.jsxIdentifier('Text')),
+        [t.jsxText('Add details, metrics, or actions inside this section card.')],
+        false
+      );
+
+      return {
+        element: t.jsxElement(
+          t.jsxOpeningElement(
+            t.jsxIdentifier('View'),
+            [
+              buildInlineStyleAttr({
+                backgroundColor: '#F8FAFC',
+                borderRadius: 16,
+                padding: 16,
+                marginTop: 12,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+              }),
+            ],
+            false
+          ),
+          t.jsxClosingElement(t.jsxIdentifier('View')),
+          [titleNode, subtitleNode],
+          false
+        ),
+        requiredImports: ['View', 'Text'],
+      };
+    }
+
+    case 'row': {
+      const leftLabel = cleanLabel || 'Row Item Title';
+      const leftText = t.jsxElement(
+        t.jsxOpeningElement(
+          t.jsxIdentifier('Text'),
+          [
+            buildInlineStyleAttr({
+              fontSize: 14,
+              fontWeight: '600',
+              color: '#0F172A',
+            }),
+          ],
+          false
+        ),
+        t.jsxClosingElement(t.jsxIdentifier('Text')),
+        [t.jsxText(leftLabel)],
+        false
+      );
+
+      const rightText = t.jsxElement(
+        t.jsxOpeningElement(
+          t.jsxIdentifier('Text'),
+          [
+            buildInlineStyleAttr({
+              fontSize: 13,
+              fontWeight: '600',
+              color: '#6366F1',
+            }),
+          ],
+          false
+        ),
+        t.jsxClosingElement(t.jsxIdentifier('Text')),
+        [t.jsxText('Details →')],
+        false
+      );
+
+      return {
+        element: t.jsxElement(
+          t.jsxOpeningElement(
+            t.jsxIdentifier('View'),
+            [
+              buildInlineStyleAttr({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: '#F8FAFC',
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+                borderRadius: 12,
+                marginTop: 8,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+              }),
+            ],
+            false
+          ),
+          t.jsxClosingElement(t.jsxIdentifier('View')),
+          [leftText, rightText],
+          false
+        ),
+        requiredImports: ['View', 'Text'],
+      };
+    }
+
+    case 'heading': {
+      const headingText = cleanLabel || 'New Heading';
+      return {
+        element: t.jsxElement(
+          t.jsxOpeningElement(
+            t.jsxIdentifier('Text'),
+            [
+              buildInlineStyleAttr({
+                fontSize: 20,
+                fontWeight: '700',
+                color: '#0F172A',
+                marginTop: 12,
+                marginBottom: 4,
+              }),
+            ],
+            false
+          ),
+          t.jsxClosingElement(t.jsxIdentifier('Text')),
+          [t.jsxText(headingText)],
+          false
+        ),
+        requiredImports: ['Text'],
+      };
+    }
+
+    case 'text': {
+      const bodyCopy = cleanLabel || 'Add your supporting paragraph description here.';
+      return {
+        element: t.jsxElement(
+          t.jsxOpeningElement(
+            t.jsxIdentifier('Text'),
+            [
+              buildInlineStyleAttr({
+                fontSize: 14,
+                lineHeight: 20,
+                color: '#475569',
+                marginTop: 6,
+              }),
+            ],
+            false
+          ),
+          t.jsxClosingElement(t.jsxIdentifier('Text')),
+          [t.jsxText(bodyCopy)],
+          false
+        ),
+        requiredImports: ['Text'],
+      };
+    }
+
+    case 'input': {
+      const placeholderText = cleanLabel || 'Enter value...';
+      return {
+        element: t.jsxElement(
+          t.jsxOpeningElement(
+            t.jsxIdentifier('TextInput'),
+            [
+              t.jsxAttribute(t.jsxIdentifier('placeholder'), t.stringLiteral(placeholderText)),
+              t.jsxAttribute(t.jsxIdentifier('placeholderTextColor'), t.stringLiteral('#94A3B8')),
+              buildInlineStyleAttr({
+                backgroundColor: '#F1F5F9',
+                borderWidth: 1,
+                borderColor: '#CBD5E1',
+                borderRadius: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                fontSize: 14,
+                color: '#0F172A',
+                marginTop: 10,
+              }),
+            ],
+            true
+          ),
+          null,
+          [],
+          true
+        ),
+        requiredImports: ['TextInput'],
+      };
+    }
+
+    case 'badge': {
+      const badgeLabel = cleanLabel || 'NEW BADGE';
+      const badgeText = t.jsxElement(
+        t.jsxOpeningElement(
+          t.jsxIdentifier('Text'),
+          [
+            buildInlineStyleAttr({
+              fontSize: 11,
+              fontWeight: '700',
+              color: '#4F46E5',
+              letterSpacing: 0.4,
+            }),
+          ],
+          false
+        ),
+        t.jsxClosingElement(t.jsxIdentifier('Text')),
+        [t.jsxText(badgeLabel)],
+        false
+      );
+
+      return {
+        element: t.jsxElement(
+          t.jsxOpeningElement(
+            t.jsxIdentifier('View'),
+            [
+              buildInlineStyleAttr({
+                alignSelf: 'flex-start',
+                backgroundColor: '#EEF2FF',
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: 999,
+                marginTop: 8,
+              }),
+            ],
+            false
+          ),
+          t.jsxClosingElement(t.jsxIdentifier('View')),
+          [badgeText],
+          false
+        ),
+        requiredImports: ['View', 'Text'],
+      };
+    }
+
+    case 'divider':
+    default: {
+      return {
+        element: t.jsxElement(
+          t.jsxOpeningElement(
+            t.jsxIdentifier('View'),
+            [
+              buildInlineStyleAttr({
+                height: 1,
+                backgroundColor: '#E2E8F0',
+                marginVertical: 14,
+                width: '100%',
+              }),
+            ],
+            true
+          ),
+          null,
+          [],
+          true
+        ),
+        requiredImports: ['View'],
+      };
+    }
+  }
+}
+
+/**
+ * Surgically inserts a new React Native component/section preset into a screen's `.tsx` AST.
+ * Automatically injects any missing `react-native` imports (`TouchableOpacity`, `TextInput`, `View`, `Text`).
+ */
+export async function insertElement(
+  workspaceRoot: string,
+  payload: InsertElementPayload
+): Promise<{
+  element: InspectedElement;
+  undoAvailable: number;
+  redoAvailable: number;
+}> {
+  const fullPath = resolveSafeScreenPath(workspaceRoot, payload.file);
+
+  return withFileLock(fullPath, async () => {
+    const previousContent = await fs.readFile(fullPath, 'utf-8');
+    const ast = parse(previousContent, {
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
+    });
+
+    interface IndexedNodeInfo {
+      index: number;
+      tagName: string;
+      element: t.JSXElement;
+      parent: t.JSXElement | t.JSXFragment | null;
+    }
+
+    const byIndex = new Map<number, IndexedNodeInfo>();
+    let currentIndex = 0;
+    let hasNavigationInScope = false;
+    let hasRouterInScope = false;
+
+    traverse(ast, {
+      Identifier(nodePath) {
+        if (nodePath.node.name === 'navigation') hasNavigationInScope = true;
+        if (nodePath.node.name === 'router') hasRouterInScope = true;
+      },
+      JSXOpeningElement(nodePath) {
+        const tagName = getJsxTagName(nodePath.node.name);
+        if (tagName === 'Fragment' || tagName === 'React.Fragment' || tagName === '') {
+          return;
+        }
+        const idx = currentIndex++;
+        const jsxElPath = nodePath.parentPath;
+        if (!jsxElPath.isJSXElement()) return;
+
+        const element = jsxElPath.node;
+        const parentNode = jsxElPath.parentPath?.node;
+        const parent =
+          t.isJSXElement(parentNode) || t.isJSXFragment(parentNode) ? parentNode : null;
+
+        byIndex.set(idx, { index: idx, tagName, element, parent });
+      },
+    });
+
+    if (byIndex.size === 0) {
+      throw new Error(`No JSX elements found in ${payload.file} to insert into.`);
+    }
+
+    const { element: newElement, requiredImports } = buildPresetJsxElement(payload.preset, {
+      label: payload.label,
+      navigateTo: payload.navigateTo,
+      hasNavigationInScope,
+      hasRouterInScope,
+    });
+
+    ensureReactNativeImports(ast, requiredImports);
+
+    const ensureOpenContainer = (container: t.JSXElement) => {
+      if (container.openingElement.selfClosing) {
+        container.openingElement.selfClosing = false;
+        container.selfClosing = false;
+        container.closingElement = t.jsxClosingElement(
+          t.cloneNode(container.openingElement.name, true)
+        );
+      }
+    };
+
+    const targetIdx =
+      payload.astPath !== undefined && payload.astPath !== ''
+        ? Number.parseInt(payload.astPath, 10)
+        : -1;
+    const targetInfo = targetIdx >= 0 ? byIndex.get(targetIdx) : undefined;
+    const requestedPlacement = payload.placement ?? 'after';
+
+    if (targetInfo) {
+      const baseTag = targetInfo.tagName.split('.').pop() ?? targetInfo.tagName;
+      const isContainer = CONTAINER_TAG_NAMES.has(baseTag);
+
+      if (
+        (requestedPlacement === 'inside' && isContainer) ||
+        !targetInfo.parent
+      ) {
+        ensureOpenContainer(targetInfo.element);
+        targetInfo.element.children.push(newElement);
+      } else {
+        const parentContainer = targetInfo.parent;
+        const pos = parentContainer.children.indexOf(targetInfo.element);
+        if (pos === -1) {
+          parentContainer.children.push(newElement);
+        } else {
+          const insertAt = requestedPlacement === 'before' ? pos : pos + 1;
+          parentContainer.children.splice(insertAt, 0, newElement);
+        }
+      }
+    } else {
+      // No specific element selected: append into the screen's primary ScrollView or root container
+      let defaultContainer = byIndex.get(0)!.element;
+      for (const info of byIndex.values()) {
+        const base = info.tagName.split('.').pop() ?? info.tagName;
+        if (base === 'ScrollView') {
+          defaultContainer = info.element;
+          break;
+        }
+      }
+      ensureOpenContainer(defaultContainer);
+      defaultContainer.children.push(newElement);
+    }
+
+    // Re-index the mutated AST to locate the pre-order astPath of newElement
+    let insertedAstPath = '0';
+    let reindexCounter = 0;
+    traverse(ast, {
+      JSXOpeningElement(nodePath) {
+        const tagName = getJsxTagName(nodePath.node.name);
+        if (tagName === 'Fragment' || tagName === 'React.Fragment' || tagName === '') {
+          return;
+        }
+        const idx = reindexCounter++;
+        if (nodePath.parentPath.isJSXElement() && nodePath.parentPath.node === newElement) {
+          insertedAstPath = String(idx);
+        }
+      },
+    });
+
+    const output = generate(ast, {
+      retainLines: false,
+      comments: true,
+      jsescOption: { minimal: true },
+    });
+
+    const nextContent = output.code + '\n';
+    await fs.writeFile(fullPath, nextContent, 'utf-8');
+
+    undoStack.push({
+      file: payload.file,
+      previousContent,
+      nextContent,
+      description: `Inserted ${payload.preset} in ${path.basename(payload.file)}`,
+      timestamp: Date.now(),
+    });
+    if (undoStack.length > MAX_HISTORY) {
+      undoStack.shift();
+    }
+    redoStack.length = 0;
+
+    const inspected = await inspectElement(workspaceRoot, {
+      file: payload.file,
+      astPath: insertedAstPath,
+    });
+
+    return {
+      element: inspected,
+      undoAvailable: undoStack.length,
+      redoAvailable: redoStack.length,
+    };
+  });
+}
+
+/**
+ * Duplicates a JSXElement immediately after itself inside its parent container.
+ */
+export async function duplicateElement(
+  workspaceRoot: string,
+  payload: DuplicateElementPayload
+): Promise<{
+  element: InspectedElement;
+  undoAvailable: number;
+  redoAvailable: number;
+}> {
+  const fullPath = resolveSafeScreenPath(workspaceRoot, payload.file);
+
+  return withFileLock(fullPath, async () => {
+    const previousContent = await fs.readFile(fullPath, 'utf-8');
+    const ast = parse(previousContent, {
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
+    });
+
+    let targetElement: t.JSXElement | null = null;
+    let parentContainer: t.JSXElement | t.JSXFragment | null = null;
+    let currentIndex = 0;
+    const requestedIdx = Number.parseInt(payload.astPath, 10);
+
+    traverse(ast, {
+      JSXOpeningElement(nodePath) {
+        const tagName = getJsxTagName(nodePath.node.name);
+        if (tagName === 'Fragment' || tagName === 'React.Fragment' || tagName === '') {
+          return;
+        }
+        const idx = currentIndex++;
+        if (idx === requestedIdx && nodePath.parentPath.isJSXElement()) {
+          targetElement = nodePath.parentPath.node;
+          const p = nodePath.parentPath.parentPath?.node;
+          parentContainer = t.isJSXElement(p) || t.isJSXFragment(p) ? p : null;
+        }
+      },
+    });
+
+    if (!targetElement || !parentContainer) {
+      throw new Error('Cannot duplicate the root screen container.');
+    }
+
+    const cloned = t.cloneNode(targetElement, true);
+    const siblings = (parentContainer as t.JSXElement).children;
+    const pos = siblings.indexOf(targetElement);
+    siblings.splice(pos + 1, 0, cloned);
+
+    let clonedAstPath = payload.astPath;
+    let reindexCounter = 0;
+    traverse(ast, {
+      JSXOpeningElement(nodePath) {
+        const tagName = getJsxTagName(nodePath.node.name);
+        if (tagName === 'Fragment' || tagName === 'React.Fragment' || tagName === '') {
+          return;
+        }
+        const idx = reindexCounter++;
+        if (nodePath.parentPath.isJSXElement() && nodePath.parentPath.node === cloned) {
+          clonedAstPath = String(idx);
+        }
+      },
+    });
+
+    const output = generate(ast, {
+      retainLines: false,
+      comments: true,
+      jsescOption: { minimal: true },
+    });
+
+    const nextContent = output.code + '\n';
+    await fs.writeFile(fullPath, nextContent, 'utf-8');
+
+    undoStack.push({
+      file: payload.file,
+      previousContent,
+      nextContent,
+      description: `Duplicated <${getJsxTagName((targetElement as t.JSXElement).openingElement.name)}> in ${path.basename(payload.file)}`,
+      timestamp: Date.now(),
+    });
+    if (undoStack.length > MAX_HISTORY) {
+      undoStack.shift();
+    }
+    redoStack.length = 0;
+
+    const inspected = await inspectElement(workspaceRoot, {
+      file: payload.file,
+      astPath: clonedAstPath,
+    });
+
+    return {
+      element: inspected,
+      undoAvailable: undoStack.length,
+      redoAvailable: redoStack.length,
+    };
+  });
+}
+
+/**
+ * Surgically deletes a non-root JSXElement from a screen's `.tsx` AST.
+ */
+export async function deleteElement(
+  workspaceRoot: string,
+  payload: DeleteElementPayload
+): Promise<{
+  deletedAstPath: string;
+  undoAvailable: number;
+  redoAvailable: number;
+}> {
+  const fullPath = resolveSafeScreenPath(workspaceRoot, payload.file);
+
+  return withFileLock(fullPath, async () => {
+    const previousContent = await fs.readFile(fullPath, 'utf-8');
+    const ast = parse(previousContent, {
+      sourceType: 'module',
+      plugins: ['typescript', 'jsx'],
+    });
+
+    let targetElement: t.JSXElement | null = null;
+    let parentContainer: t.JSXElement | t.JSXFragment | null = null;
+    let currentIndex = 0;
+    const requestedIdx = Number.parseInt(payload.astPath, 10);
+
+    if (requestedIdx === 0) {
+      throw new Error('Cannot delete the root screen container element.');
+    }
+
+    traverse(ast, {
+      JSXOpeningElement(nodePath) {
+        const tagName = getJsxTagName(nodePath.node.name);
+        if (tagName === 'Fragment' || tagName === 'React.Fragment' || tagName === '') {
+          return;
+        }
+        const idx = currentIndex++;
+        if (idx === requestedIdx && nodePath.parentPath.isJSXElement()) {
+          targetElement = nodePath.parentPath.node;
+          const p = nodePath.parentPath.parentPath?.node;
+          parentContainer = t.isJSXElement(p) || t.isJSXFragment(p) ? p : null;
+        }
+      },
+    });
+
+    if (!targetElement || !parentContainer) {
+      throw new Error(`Element at astPath=${payload.astPath} cannot be deleted.`);
+    }
+
+    const siblings = (parentContainer as t.JSXElement).children;
+    const pos = siblings.indexOf(targetElement);
+    if (pos === -1) {
+      throw new Error('Could not find element inside parent children.');
+    }
+    siblings.splice(pos, 1);
+
+    const output = generate(ast, {
+      retainLines: false,
+      comments: true,
+      jsescOption: { minimal: true },
+    });
+
+    const nextContent = output.code + '\n';
+    await fs.writeFile(fullPath, nextContent, 'utf-8');
+
+    undoStack.push({
+      file: payload.file,
+      previousContent,
+      nextContent,
+      description: `Deleted <${getJsxTagName((targetElement as t.JSXElement).openingElement.name)}> in ${path.basename(payload.file)}`,
+      timestamp: Date.now(),
+    });
+    if (undoStack.length > MAX_HISTORY) {
+      undoStack.shift();
+    }
+    redoStack.length = 0;
+
+    return {
+      deletedAstPath: payload.astPath,
       undoAvailable: undoStack.length,
       redoAvailable: redoStack.length,
     };

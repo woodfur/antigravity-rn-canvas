@@ -8,11 +8,17 @@ import {
   inspectElement,
   patchElement,
   reorderElement,
+  insertElement,
+  duplicateElement,
+  deleteElement,
   undoLastPatch,
   redoLastPatch,
   getHistoryStatus,
   type PatchPayload,
   type ReorderPayload,
+  type InsertElementPayload,
+  type DuplicateElementPayload,
+  type DeleteElementPayload,
 } from './astEngine';
 
 const MAX_BODY_BYTES = 1_000_000;
@@ -278,6 +284,48 @@ export function viteCanvasApiMiddleware(workspaceRoot: string): Plugin {
             return sendJson(res, 200, {
               ok: true,
               element: result.element,
+              history: {
+                undoAvailable: result.undoAvailable,
+                redoAvailable: result.redoAvailable,
+              },
+            });
+          }
+
+          // POST /api/insert
+          if (req.method === 'POST' && pathname === '/api/insert') {
+            const body = await readJsonBody<InsertElementPayload>(req);
+            const result = await insertElement(workspaceRoot, body);
+            return sendJson(res, 200, {
+              ok: true,
+              element: result.element,
+              history: {
+                undoAvailable: result.undoAvailable,
+                redoAvailable: result.redoAvailable,
+              },
+            });
+          }
+
+          // POST /api/duplicate
+          if (req.method === 'POST' && pathname === '/api/duplicate') {
+            const body = await readJsonBody<DuplicateElementPayload>(req);
+            const result = await duplicateElement(workspaceRoot, body);
+            return sendJson(res, 200, {
+              ok: true,
+              element: result.element,
+              history: {
+                undoAvailable: result.undoAvailable,
+                redoAvailable: result.redoAvailable,
+              },
+            });
+          }
+
+          // POST /api/delete
+          if (req.method === 'POST' && pathname === '/api/delete') {
+            const body = await readJsonBody<DeleteElementPayload>(req);
+            const result = await deleteElement(workspaceRoot, body);
+            return sendJson(res, 200, {
+              ok: true,
+              deletedAstPath: result.deletedAstPath,
               history: {
                 undoAvailable: result.undoAvailable,
                 redoAvailable: result.redoAvailable,

@@ -11,6 +11,10 @@ import {
   inspectElement,
   patchElement,
   reorderElement,
+  insertElement,
+  duplicateElement,
+  deleteElement,
+  type InsertElementPreset,
   type StyleValue,
 } from '../src/server/astEngine.js';
 
@@ -120,6 +124,67 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['file', 'astPath'],
         },
       },
+      {
+        name: 'insert_screen_element',
+        description:
+          'Surgically inserts a new React Native component/section preset (button, section, row, heading, text, input, badge, divider) into a screen .tsx AST and auto-injects required react-native imports.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file: {
+              type: 'string',
+              description: 'Relative path to the screen file (e.g. src/screens/HomeScreen.tsx)',
+            },
+            astPath: {
+              type: 'string',
+              description: 'Optional AST index of the reference JSX element',
+            },
+            placement: {
+              type: 'string',
+              enum: ['inside', 'after', 'before'],
+              description: 'Placement relative to astPath (defaults to "after" or "inside")',
+            },
+            preset: {
+              type: 'string',
+              enum: ['button', 'section', 'row', 'heading', 'text', 'input', 'badge', 'divider'],
+              description: 'Component preset to insert',
+            },
+            label: {
+              type: 'string',
+              description: 'Optional custom label/text/placeholder for the inserted component',
+            },
+            navigateTo: {
+              type: 'string',
+              description: 'Optional target screen ID if inserting a navigation button',
+            },
+          },
+          required: ['file', 'preset'],
+        },
+      },
+      {
+        name: 'duplicate_screen_element',
+        description: 'Duplicates a JSX element right after itself in the screen .tsx AST.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file: { type: 'string' },
+            astPath: { type: 'string' },
+          },
+          required: ['file', 'astPath'],
+        },
+      },
+      {
+        name: 'delete_screen_element',
+        description: 'Deletes a non-root JSX element from the screen .tsx AST.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file: { type: 'string' },
+            astPath: { type: 'string' },
+          },
+          required: ['file', 'astPath'],
+        },
+      },
     ],
   };
 });
@@ -177,6 +242,48 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       targetAstPath,
       placement,
     });
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  }
+
+  if (name === 'insert_screen_element') {
+    const file = String(args?.file ?? '');
+    const preset = String(args?.preset ?? 'button') as InsertElementPreset;
+    const astPath = typeof args?.astPath === 'string' ? args.astPath : undefined;
+    const placement =
+      args?.placement === 'inside' || args?.placement === 'after' || args?.placement === 'before'
+        ? args.placement
+        : undefined;
+    const label = typeof args?.label === 'string' ? args.label : undefined;
+    const navigateTo = typeof args?.navigateTo === 'string' ? args.navigateTo : undefined;
+
+    const result = await insertElement(WORKSPACE_ROOT, {
+      file,
+      astPath,
+      placement,
+      preset,
+      label,
+      navigateTo,
+    });
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  }
+
+  if (name === 'duplicate_screen_element') {
+    const file = String(args?.file ?? '');
+    const astPath = String(args?.astPath ?? '1');
+    const result = await duplicateElement(WORKSPACE_ROOT, { file, astPath });
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  }
+
+  if (name === 'delete_screen_element') {
+    const file = String(args?.file ?? '');
+    const astPath = String(args?.astPath ?? '1');
+    const result = await deleteElement(WORKSPACE_ROOT, { file, astPath });
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };

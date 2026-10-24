@@ -18,6 +18,7 @@ import {
   Sliders,
   Sun,
   Moon,
+  Plus,
 } from 'lucide-react';
 import { SCREEN_COMPONENTS, SCREEN_ORDER } from '../screens';
 import { ScreenArtboard } from './ScreenArtboard';
@@ -31,7 +32,13 @@ import type {
   ScreenMetadata,
   SelectedElementRef,
 } from './types';
-import type { PatchPayload, ReorderPayload } from '../server/astEngine';
+import type {
+  PatchPayload,
+  ReorderPayload,
+  InsertElementPayload,
+  DuplicateElementPayload,
+  DeleteElementPayload,
+} from '../server/astEngine';
 
 const DEFAULT_WIDTH = 393;
 const DEFAULT_HEIGHT = 852;
@@ -410,6 +417,132 @@ export const CanvasApp: React.FC = () => {
         }
       } catch {
         setStatusMessage('Failed to reorder AST element');
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [fetchScreens]
+  );
+
+  // Surgical AST Component / Section Insertion handler
+  const handleInsertElement = useCallback(
+    async (payload: InsertElementPayload) => {
+      setIsSaving(true);
+      setStatusMessage(null);
+      try {
+        const res = await fetch('/api/insert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = (await res.json()) as {
+          ok: boolean;
+          element?: InspectedElement;
+          history?: { undoAvailable: number; redoAvailable: number };
+          error?: string;
+        };
+        if (data.ok && data.element) {
+          setInspectedData(data.element);
+          if (data.history) setHistoryState(data.history);
+          const ownerScreen =
+            screens.find((s) => s.filePath === data.element!.file)?.id ??
+            activeScreenId ??
+            'Home';
+          setSelectedElement({
+            screenId: ownerScreen,
+            file: data.element.file,
+            astPath: data.element.astPath,
+            line: data.element.line,
+            col: data.element.col,
+            tagName: data.element.tagName,
+          });
+          setStatusMessage(`Added <${data.element.tagName}> to .tsx`);
+          void fetchScreens();
+        } else if (data.error) {
+          setStatusMessage(`Error: ${data.error}`);
+        }
+      } catch {
+        setStatusMessage('Failed to insert AST element');
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [fetchScreens, screens, activeScreenId]
+  );
+
+  // Surgical AST Duplicate Element handler
+  const handleDuplicateElement = useCallback(
+    async (payload: DuplicateElementPayload) => {
+      setIsSaving(true);
+      setStatusMessage(null);
+      try {
+        const res = await fetch('/api/duplicate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = (await res.json()) as {
+          ok: boolean;
+          element?: InspectedElement;
+          history?: { undoAvailable: number; redoAvailable: number };
+          error?: string;
+        };
+        if (data.ok && data.element) {
+          setInspectedData(data.element);
+          if (data.history) setHistoryState(data.history);
+          setSelectedElement((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  line: data.element!.line,
+                  col: data.element!.col,
+                  astPath: data.element!.astPath,
+                  tagName: data.element!.tagName,
+                }
+              : null
+          );
+          setStatusMessage('Duplicated element in .tsx');
+          void fetchScreens();
+        } else if (data.error) {
+          setStatusMessage(`Error: ${data.error}`);
+        }
+      } catch {
+        setStatusMessage('Failed to duplicate AST element');
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [fetchScreens]
+  );
+
+  // Surgical AST Delete Element handler
+  const handleDeleteElement = useCallback(
+    async (payload: DeleteElementPayload) => {
+      setIsSaving(true);
+      setStatusMessage(null);
+      try {
+        const res = await fetch('/api/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = (await res.json()) as {
+          ok: boolean;
+          deletedAstPath?: string;
+          history?: { undoAvailable: number; redoAvailable: number };
+          error?: string;
+        };
+        if (data.ok) {
+          if (data.history) setHistoryState(data.history);
+          setSelectedElement(null);
+          setInspectedData(null);
+          setStatusMessage('Deleted element from .tsx');
+          void fetchScreens();
+        } else if (data.error) {
+          setStatusMessage(`Error: ${data.error}`);
+        }
+      } catch {
+        setStatusMessage('Failed to delete AST element');
       } finally {
         setIsSaving(false);
       }
@@ -944,6 +1077,32 @@ export const CanvasApp: React.FC = () => {
             <GitCommit size={14} style={{ flexShrink: 0 }} />
             <span className="zelune-reveal-label">Flow Graph</span>
           </button>
+
+          <button
+            type="button"
+            className="zelune-interactive"
+            onClick={() => {
+              setIsRightPanelOpen(true);
+              window.dispatchEvent(new CustomEvent('zelune:open-insert-palette'));
+            }}
+            title="Add Button, Section, Input, or Component to Active Screen"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: '6px 10px',
+              borderRadius: 7,
+              border: '1px solid rgba(56, 189, 248, 0.4)',
+              backgroundColor: 'rgba(56, 189, 248, 0.12)',
+              color: colorScheme === 'dark' ? '#38BDF8' : '#0284C7',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <Plus size={14} style={{ flexShrink: 0 }} />
+            <span>Add Element</span>
+          </button>
         </div>
 
         {/* Right: Undo/Redo, Viewport Controls, Theme Toggle & Right Inspector Toggle */}
@@ -1471,11 +1630,18 @@ export const CanvasApp: React.FC = () => {
         {/* Right: AST Visual Inspector Panel */}
         <InspectorPanel
           inspected={inspectedData}
+          screens={screens}
+          activeScreenId={activeScreenId}
           isOpen={isRightPanelOpen}
           isLoading={isInspecting}
           isSaving={isSaving}
           statusMessage={statusMessage}
           onPatch={handlePatchElement}
+          onInsert={handleInsertElement}
+          onDuplicate={handleDuplicateElement}
+          onDelete={handleDeleteElement}
+          onReorder={handleReorderElement}
+          onSelectScreen={setActiveScreenId}
           onClearSelection={() => {
             setSelectedElement(null);
             setInspectedData(null);
