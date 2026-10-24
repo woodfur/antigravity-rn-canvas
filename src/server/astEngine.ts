@@ -2,13 +2,87 @@ import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import path from 'node:path';
 import { parse } from '@babel/parser';
-import _traverse, { type NodePath } from '@babel/traverse';
 import _generate from '@babel/generator';
 import * as t from '@babel/types';
-import { getJsxTagName } from '../../plugins/viteRnSourceInject';
 
-const traverse = (_traverse as unknown as { default?: typeof _traverse }).default ?? _traverse;
 const generate = (_generate as unknown as { default?: typeof _generate }).default ?? _generate;
+
+export interface AstNodePath<T extends t.Node = t.Node> {
+  node: T;
+  parentPath: AstNodePath<t.Node> | null;
+  isJSXElement(): this is AstNodePath<t.JSXElement>;
+  isJSXFragment(): this is AstNodePath<t.JSXFragment>;
+  findParent(predicate: (p: AstNodePath<t.Node>) => boolean): AstNodePath<t.Node> | null;
+}
+
+type NodePath<T extends t.Node = t.Node> = AstNodePath<T>;
+
+export type AstVisitorMap = {
+  [K in t.Node['type']]?: (path: AstNodePath<Extract<t.Node, { type: K }>>) => void;
+};
+
+export function getJsxTagName(nameNode: t.JSXOpeningElement['name']): string {
+  if (t.isJSXIdentifier(nameNode)) {
+    return nameNode.name;
+  }
+  if (t.isJSXMemberExpression(nameNode)) {
+    return `${getJsxTagName(nameNode.object)}.${nameNode.property.name}`;
+  }
+  if (t.isJSXNamespacedName(nameNode)) {
+    return `${nameNode.namespace.name}:${nameNode.name.name}`;
+  }
+  return 'Unknown';
+}
+
+export function traverse(rootNode: t.Node, visitors: AstVisitorMap): void {
+  function createPath(node: t.Node, parentPath: AstNodePath<t.Node> | null): AstNodePath<t.Node> {
+    return {
+      node,
+      parentPath,
+      isJSXElement(): this is AstNodePath<t.JSXElement> {
+        return t.isJSXElement(node);
+      },
+      isJSXFragment(): this is AstNodePath<t.JSXFragment> {
+        return t.isJSXFragment(node);
+      },
+      findParent(predicate) {
+        let curr = parentPath;
+        while (curr) {
+          if (predicate(curr)) return curr;
+          curr = curr.parentPath;
+        }
+        return null;
+      },
+    };
+  }
+
+  function visit(node: unknown, parentPath: AstNodePath<t.Node> | null): void {
+    if (!node || typeof node !== 'object' || typeof (node as t.Node).type !== 'string') return;
+    const typedNode = node as t.Node;
+    const pathObj = createPath(typedNode, parentPath);
+    const handler = visitors[typedNode.type as t.Node['type']] as
+      | ((p: AstNodePath<t.Node>) => void)
+      | undefined;
+    if (typeof handler === 'function') {
+      handler(pathObj);
+    }
+    const keys = t.VISITOR_KEYS[typedNode.type];
+    if (!keys) return;
+    const rec = typedNode as unknown as Record<string, unknown>;
+    for (const key of keys) {
+      const child = rec[key];
+      if (Array.isArray(child)) {
+        for (let i = 0; i < child.length; i++) {
+          if (child[i]) visit(child[i], pathObj);
+        }
+      } else if (child && typeof child === 'object') {
+        visit(child, pathObj);
+      }
+    }
+  }
+
+  visit(rootNode, null);
+}
 
 export interface NavigationEdge {
   id: string;
@@ -807,10 +881,7 @@ function resolveCandidateToScreenId(
   const trimmed = rawCandidate.trim();
   if (!trimmed || trimmed.length > 80) return null;
   if (
-    trimmed.startsWith('http://') ||
-    trimmed.startsWith('https://') ||
-    trimmed.startsWith('mailto:') ||
-    trimmed.startsWith('tel:') ||
+    /^[a-z][a-z0-9+.-]*:/i.test(trimmed) ||
     trimmed.startsWith('#') ||
     /\.(png|jpg|jpeg|svg|webp|gif|json|css)$/i.test(trimmed)
   ) {

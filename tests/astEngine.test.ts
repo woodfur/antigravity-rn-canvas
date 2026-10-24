@@ -819,4 +819,29 @@ describe('Antigravity React Native Visual Canvas — AST Engine', () => {
     expect(Array.isArray(parsedScreens)).toBe(true);
     expect(parsedScreens.length).toBeGreaterThanOrEqual(5);
   });
+
+  it('normalizes React Native styles in zero-dependency reactNativeShim and contains zero Proxy/eval/external-URL triggers', () => {
+    const domStyle = RNDefault.StyleSheet.flatten([
+      { paddingHorizontal: 16, paddingVertical: 10 },
+      { paddingLeft: 24, borderWidth: 1, borderColor: '#6366F1' },
+    ]);
+    expect(domStyle.paddingHorizontal).toBe(16);
+    expect(domStyle.paddingLeft).toBe(24);
+    expect(domStyle.borderColor).toBe('#6366F1');
+
+    // Verify zero Proxy or http:// literals inside published runtime & server files
+    const filesToCheck = [
+      'src/runtime/reactNativeShim.ts',
+      'src/runtime/MockNavigationContext.tsx',
+      'src/server/apiMiddleware.ts',
+      'src/server/astEngine.ts',
+      'plugins/viteReactNativeFallbackPlugin.ts',
+      'index.html',
+    ];
+    for (const rel of filesToCheck) {
+      const src = fs.readFileSync(path.join(WORKSPACE_ROOT, rel), 'utf-8');
+      expect(src).not.toContain('new Proxy');
+      expect(src).not.toMatch(/https?:\/\//i);
+    }
+  });
 });

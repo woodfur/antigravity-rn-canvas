@@ -4,11 +4,9 @@ import readline from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import fs from "node:fs/promises";
 import { parse } from "@babel/parser";
-import _traverse from "@babel/traverse";
 import _generate from "@babel/generator";
 import * as t from "@babel/types";
-_traverse.default ?? _traverse;
-_generate.default ?? _generate;
+const generate = _generate.default ?? _generate;
 function getJsxTagName(nameNode) {
   if (t.isJSXIdentifier(nameNode)) {
     return nameNode.name;
@@ -21,8 +19,51 @@ function getJsxTagName(nameNode) {
   }
   return "Unknown";
 }
-const traverse = _traverse.default ?? _traverse;
-const generate = _generate.default ?? _generate;
+function traverse(rootNode, visitors) {
+  function createPath(node, parentPath) {
+    return {
+      node,
+      parentPath,
+      isJSXElement() {
+        return t.isJSXElement(node);
+      },
+      isJSXFragment() {
+        return t.isJSXFragment(node);
+      },
+      findParent(predicate) {
+        let curr = parentPath;
+        while (curr) {
+          if (predicate(curr)) return curr;
+          curr = curr.parentPath;
+        }
+        return null;
+      }
+    };
+  }
+  function visit(node, parentPath) {
+    if (!node || typeof node !== "object" || typeof node.type !== "string") return;
+    const typedNode = node;
+    const pathObj = createPath(typedNode, parentPath);
+    const handler = visitors[typedNode.type];
+    if (typeof handler === "function") {
+      handler(pathObj);
+    }
+    const keys = t.VISITOR_KEYS[typedNode.type];
+    if (!keys) return;
+    const rec = typedNode;
+    for (const key of keys) {
+      const child = rec[key];
+      if (Array.isArray(child)) {
+        for (let i = 0; i < child.length; i++) {
+          if (child[i]) visit(child[i], pathObj);
+        }
+      } else if (child && typeof child === "object") {
+        visit(child, pathObj);
+      }
+    }
+  }
+  visit(rootNode, null);
+}
 const MAX_HISTORY = 50;
 const undoStack = [];
 const redoStack = [];
@@ -519,7 +560,7 @@ function extractRouteStringsFromAstNode(node, depth = 0) {
 function resolveCandidateToScreenId(rawCandidate, screenFiles, currentScreenId, allowUnmatchedFallback = false) {
   const trimmed = rawCandidate.trim();
   if (!trimmed || trimmed.length > 80) return null;
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("mailto:") || trimmed.startsWith("tel:") || trimmed.startsWith("#") || /\.(png|jpg|jpeg|svg|webp|gif|json|css)$/i.test(trimmed)) {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) || trimmed.startsWith("#") || /\.(png|jpg|jpeg|svg|webp|gif|json|css)$/i.test(trimmed)) {
     return null;
   }
   const normalized = normalizeRouteTarget(trimmed);
@@ -2114,7 +2155,7 @@ async function handleMcpJsonRpcRequest(request, customWorkspaceRoot) {
           },
           serverInfo: {
             name: "zelune",
-            version: "1.6.1"
+            version: "1.6.3"
           }
         }
       };

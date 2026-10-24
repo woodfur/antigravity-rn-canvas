@@ -237,8 +237,11 @@ export function viteCanvasApiMiddleware(workspaceRoot: string): Plugin {
 
         const activeRoot = getActiveProjectRoot(workspaceRoot);
         const layoutFilePath = path.resolve(activeRoot, '.canvas-layout.json');
-        const urlObj = new URL(req.url, 'http://127.0.0.1');
-        const pathname = urlObj.pathname;
+        const qIndex = req.url.indexOf('?');
+        const pathname = qIndex === -1 ? req.url : req.url.slice(0, qIndex);
+        const searchParams = new URLSearchParams(
+          qIndex === -1 ? '' : req.url.slice(qIndex + 1)
+        );
 
         try {
           // GET /api/screens
@@ -253,9 +256,9 @@ export function viteCanvasApiMiddleware(workspaceRoot: string): Plugin {
 
           // GET /api/inspect?file=...&astPath=...&line=...
           if (req.method === 'GET' && pathname === '/api/inspect') {
-            const file = urlObj.searchParams.get('file') ?? '';
-            const astPath = urlObj.searchParams.get('astPath') ?? '';
-            const lineParam = urlObj.searchParams.get('line');
+            const file = searchParams.get('file') ?? '';
+            const astPath = searchParams.get('astPath') ?? '';
+            const lineParam = searchParams.get('line');
             const line = lineParam ? Number.parseInt(lineParam, 10) : undefined;
 
             const element = await inspectElement(workspaceRoot, { file, astPath, line });

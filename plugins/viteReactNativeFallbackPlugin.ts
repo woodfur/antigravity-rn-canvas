@@ -43,7 +43,6 @@ const CORE_PASSTHROUGH_PACKAGES = new Set([
   'react-dom/client',
   'react/jsx-runtime',
   'react/jsx-dev-runtime',
-  'react-native-web',
   'virtual:zelune-screens',
 ]);
 
@@ -333,8 +332,8 @@ export function viteReactNativeFallbackPlugin(
           !cleanImporter.startsWith(zeluneDemoScreensDir + path.sep)) ||
           cleanImporter.includes(`${path.sep}node_modules${path.sep}`));
 
-      // 1. Exact 'react-native' -> reactNativeShim.ts; subpaths 'react-native/...' -> virtual stub
-      if (source === 'react-native') {
+      // 1. Exact 'react-native' or 'react-native-web' -> reactNativeShim.ts; subpaths 'react-native/...' -> virtual stub
+      if (source === 'react-native' || source === 'react-native-web') {
         if (cleanImporter && cleanImporter.replace(/\\/g, '/') === reactNativeShimPath) {
           return null;
         }
@@ -476,6 +475,15 @@ export function viteReactNativeFallbackPlugin(
         `export * from ${JSON.stringify(normalizedShimPath)};`,
         `import * as KnownShims from ${JSON.stringify(normalizedShimPath)};`,
         `import DefaultShim, { SAFE_CHAINABLE_PROXY } from ${JSON.stringify(normalizedShimPath)};`,
+        `function createSimpleSubComponent(displayName) {`,
+        `  const Sub = React.forwardRef(function SubStub(props, ref) {`,
+        `    const content = typeof props?.children === 'function' ? props.children(SAFE_CHAINABLE_PROXY) : props?.children;`,
+        `    return React.createElement(View, { style: props?.style, className: props?.className, ref }, content);`,
+        `  });`,
+        `  Sub.displayName = displayName;`,
+        `  return Sub;`,
+        `}`,
+        `const COMPOUND_SUB_NAMES = ['Item', 'Header', 'Footer', 'Title', 'Content', 'Trigger', 'Portal', 'Overlay', 'Close', 'Action', 'Cancel', 'Description', 'Label', 'Group', 'Separator', 'Value', 'Icon', 'Viewport', 'Root', 'Screen', 'Navigator', 'Provider', 'Consumer'];`,
         `function createUniversalComponentStub(displayName) {`,
         `  const Comp = React.forwardRef(function UniversalNativeStub(props, ref) {`,
         `    if (typeof props?.render === 'function') {`,
@@ -489,15 +497,10 @@ export function viteReactNativeFallbackPlugin(
         `    return React.createElement(View, { style: props?.style, className: props?.className, ref }, content);`,
         `  });`,
         `  Comp.displayName = displayName;`,
-        `  return new Proxy(Comp, {`,
-        `    get(target, prop) {`,
-        `      if (prop in target) return target[prop];`,
-        `      if (typeof prop === 'string' && /^[A-Z]/.test(prop)) {`,
-        `        return createUniversalComponentStub(displayName + '.' + prop);`,
-        `      }`,
-        `      return SAFE_CHAINABLE_PROXY;`,
-        `    },`,
-        `  });`,
+        `  for (const sub of COMPOUND_SUB_NAMES) {`,
+        `    Comp[sub] = createSimpleSubComponent(displayName + '.' + sub);`,
+        `  }`,
+        `  return Comp;`,
         `}`,
         `function resolveStubExport(name) {`,
         `  if (name in KnownShims) return KnownShims[name];`,

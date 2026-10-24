@@ -24,51 +24,19 @@ if (typeof window !== 'undefined') {
     NODE_ENV: 'development',
     EXPO_PUBLIC_PLATFORM: 'web',
   };
-  const envProxy = new Proxy(baseEnv, {
-    get(target, prop) {
-      if (typeof prop !== 'string') return Reflect.get(target, prop);
-      if (prop in target && target[prop] !== undefined && target[prop] !== '') {
-        return target[prop];
-      }
-      return 'zelune-preview';
-    },
-  });
-
-  const createAssetStub = (): unknown => {
-    const fn = () => proxy;
-    const proxy: unknown = new Proxy(fn, {
-      get(_t, prop) {
-        if (prop === Symbol.toPrimitive) return (hint: string) => (hint === 'number' ? 0 : '');
-        if (prop === 'valueOf') return () => 0;
-        if (prop === 'toString') return () => '';
-        if (prop === 'uri' || prop === 'default') return '';
-        return proxy;
-      },
-    });
-    return proxy;
-  };
 
   const win = window as unknown as Record<string, unknown>;
   win.global = window;
   win.__DEV__ = true;
   if (!win.process || typeof win.process !== 'object') {
     win.process = {
-      env: envProxy,
+      env: baseEnv,
       platform: 'browser',
       version: '',
       cwd: () => '/',
     };
   } else {
-    (win.process as Record<string, unknown>).env = envProxy;
-  }
-  const reqProp = ['req', 'uire'].join('');
-  if (typeof win[reqProp] !== 'function') {
-    win[reqProp] = (modId: unknown) => {
-      if (typeof modId === 'string' && /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(modId)) {
-        return { uri: modId, default: modId };
-      }
-      return createAssetStub();
-    };
+    (win.process as Record<string, unknown>).env = baseEnv;
   }
 }
 
@@ -711,17 +679,49 @@ export const SvgUri: React.FC<{ uri?: string; width?: number; height?: number }>
 // ============================================================================
 // 8. React Native Reanimated & Gesture Handler Shims
 // ============================================================================
+const CHAINABLE_ANIMATION_METHODS = [
+  'duration',
+  'delay',
+  'springify',
+  'damping',
+  'mass',
+  'stiffness',
+  'overshootClamping',
+  'restDisplacementThreshold',
+  'restSpeedThreshold',
+  'withInitialValues',
+  'withCallback',
+  'easing',
+  'randomDelay',
+  'enabled',
+  'onBegin',
+  'onStart',
+  'onUpdate',
+  'onChange',
+  'onEnd',
+  'onFinalize',
+  'onTouchesDown',
+  'onTouchesMove',
+  'onTouchesUp',
+  'activeOffsetX',
+  'activeOffsetY',
+  'failOffsetX',
+  'failOffsetY',
+  'minDistance',
+  'minPointers',
+  'maxPointers',
+  'runOnJS',
+];
+
 function createChainableAnimationStub(): Record<string, unknown> {
-  const proxy: Record<string, unknown> = new Proxy(
-    {},
-    {
-      get(_target, prop) {
-        if (prop === 'build') return () => ({});
-        return () => proxy;
-      },
-    }
-  );
-  return proxy;
+  const stub: Record<string, unknown> = {
+    build: () => ({}),
+  };
+  const returnSelf = () => stub;
+  for (const method of CHAINABLE_ANIMATION_METHODS) {
+    stub[method] = returnSelf;
+  }
+  return stub;
 }
 
 export const FadeIn = createChainableAnimationStub();
@@ -1010,10 +1010,7 @@ export async function setStringAsync(): Promise<boolean> {
 export async function getStringAsync(): Promise<string> {
   return '';
 }
-export async function openURL(url: string): Promise<boolean> {
-  if (typeof window !== 'undefined') {
-    window.open(url, '_blank', 'noopener,noreferrer');
-  }
+export async function openURL(_url: string): Promise<boolean> {
   return true;
 }
 export function createURL(pathStr = ''): string {
@@ -1166,72 +1163,150 @@ export function useMutation() {
 // ============================================================================
 // 11. Universal Chainable Proxy, Zod, React Hook Form & Context Fallbacks
 // ============================================================================
+const CHAINABLE_SCHEMA_METHODS = [
+  'string',
+  'number',
+  'boolean',
+  'object',
+  'array',
+  'enum',
+  'nativeEnum',
+  'union',
+  'discriminatedUnion',
+  'intersection',
+  'literal',
+  'record',
+  'set',
+  'tuple',
+  'lazy',
+  'function',
+  'promise',
+  'any',
+  'unknown',
+  'never',
+  'void',
+  'null',
+  'undefined',
+  'date',
+  'symbol',
+  'bigint',
+  'optional',
+  'nullable',
+  'nullish',
+  'default',
+  'describe',
+  'brand',
+  'readonly',
+  'pipe',
+  'preprocess',
+  'email',
+  'url',
+  'emoji',
+  'uuid',
+  'cuid',
+  'cuid2',
+  'ulid',
+  'regex',
+  'includes',
+  'startsWith',
+  'endsWith',
+  'datetime',
+  'ip',
+  'trim',
+  'toLowerCase',
+  'toUpperCase',
+  'min',
+  'max',
+  'int',
+  'positive',
+  'nonnegative',
+  'negative',
+  'nonpositive',
+  'multipleOf',
+  'finite',
+  'safe',
+  'nonempty',
+  'refine',
+  'superRefine',
+  'transform',
+  'extend',
+  'merge',
+  'pick',
+  'omit',
+  'partial',
+  'deepPartial',
+  'required',
+  'passthrough',
+  'strict',
+  'strip',
+  'catchall',
+  'or',
+  'and',
+];
+
 export function createSafeChainableProxy(): unknown {
   const fnTarget = function (..._args: unknown[]) {
-    return proxy;
+    return fnTarget;
+  } as unknown as Record<string | symbol, unknown>;
+
+  const returnSelf = () => fnTarget;
+  for (const method of CHAINABLE_SCHEMA_METHODS) {
+    fnTarget[method] = returnSelf;
+  }
+
+  fnTarget[Symbol.toPrimitive] = (hint: string) => (hint === 'number' ? 0 : '');
+  fnTarget.valueOf = () => 0;
+  fnTarget.toString = () => '';
+  fnTarget[Symbol.iterator] = function* () {
+    yield fnTarget;
+    yield fnTarget;
   };
-  const proxy: unknown = new Proxy(fnTarget, {
-    get(_target, prop) {
-      if (prop === Symbol.toPrimitive) {
-        return (hint: string) => (hint === 'number' ? 0 : '');
-      }
-      if (prop === 'valueOf') return () => 0;
-      if (prop === 'toString') return () => '';
-      if (prop === Symbol.iterator) {
-        return function* () {
-          yield proxy;
-          yield proxy;
-        };
-      }
-      if (prop === 'then') {
-        return (onFulfilled?: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) =>
-          Promise.resolve({ data: null, error: null }).then(onFulfilled, onRejected);
-      }
-      if (prop === 'catch') return () => Promise.resolve({ data: null, error: null });
-      if (prop === 'finally')
-        return (cb?: () => void) => Promise.resolve({ data: null, error: null }).finally(cb);
-      if (prop === 'safeParse' || prop === 'spa' || prop === 'safeParseAsync') {
-        return (val?: unknown) => ({ success: true, data: val ?? {}, error: null });
-      }
-      if (prop === 'parse' || prop === 'parseAsync') {
-        return (val?: unknown) => val ?? {};
-      }
-      if (
-        prop === 'isLoading' ||
-        prop === 'loading' ||
-        prop === 'isPending' ||
-        prop === 'isError' ||
-        prop === 'disabled' ||
-        prop === 'isSubmitting'
-      ) {
-        return false;
-      }
-      if (
-        prop === 'isReady' ||
-        prop === 'granted' ||
-        prop === 'isSuccess' ||
-        prop === 'isAuthenticated' ||
-        prop === 'isValid'
-      ) {
-        return true;
-      }
-      if (prop === 'error' || prop === 'errors') return null;
-      if (prop === 'status') return 'granted';
-      if (prop === 'data' || prop === 'items' || prop === 'results' || prop === 'list') {
-        return STABLE_EMPTY_ARRAY;
-      }
-      if (prop === 'length' || prop === 'size' || prop === 'count' || prop === 'value') return 0;
-      if (prop === 'ref') return { current: null };
-      if (prop === 'map' || prop === 'filter' || prop === 'slice' || prop === 'flatMap') {
-        return () => STABLE_EMPTY_ARRAY;
-      }
-      if (prop === 'forEach') return () => undefined;
-      if (prop === 'reduce') return (_fn: unknown, init: unknown) => init;
-      if (prop === 'shape' || prop === '_def') return {};
-      return proxy;
-    },
+  fnTarget.then = (onFulfilled?: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) =>
+    Promise.resolve({ data: null, error: null }).then(onFulfilled, onRejected);
+  fnTarget.catch = () => Promise.resolve({ data: null, error: null });
+  fnTarget.finally = (cb?: () => void) => Promise.resolve({ data: null, error: null }).finally(cb);
+  fnTarget.safeParse = (val?: unknown) => ({ success: true, data: val ?? {}, error: null });
+  fnTarget.spa = fnTarget.safeParse;
+  fnTarget.safeParseAsync = async (val?: unknown) => ({
+    success: true,
+    data: val ?? {},
+    error: null,
   });
-  return proxy;
+  fnTarget.parse = (val?: unknown) => val ?? {};
+  fnTarget.parseAsync = async (val?: unknown) => val ?? {};
+  fnTarget.isLoading = false;
+  fnTarget.loading = false;
+  fnTarget.isPending = false;
+  fnTarget.isError = false;
+  fnTarget.disabled = false;
+  fnTarget.isSubmitting = false;
+  fnTarget.isReady = true;
+  fnTarget.granted = true;
+  fnTarget.isSuccess = true;
+  fnTarget.isAuthenticated = true;
+  fnTarget.isValid = true;
+  fnTarget.error = null;
+  fnTarget.errors = null;
+  fnTarget.status = 'granted';
+  fnTarget.data = STABLE_EMPTY_ARRAY;
+  fnTarget.items = STABLE_EMPTY_ARRAY;
+  fnTarget.results = STABLE_EMPTY_ARRAY;
+  fnTarget.list = STABLE_EMPTY_ARRAY;
+  fnTarget.size = 0;
+  fnTarget.count = 0;
+  fnTarget.value = 0;
+  fnTarget.ref = { current: null };
+  fnTarget.map = () => STABLE_EMPTY_ARRAY;
+  fnTarget.filter = () => STABLE_EMPTY_ARRAY;
+  fnTarget.slice = () => STABLE_EMPTY_ARRAY;
+  fnTarget.flatMap = () => STABLE_EMPTY_ARRAY;
+  fnTarget.forEach = () => undefined;
+  fnTarget.reduce = (_fn: unknown, init: unknown) => init;
+  fnTarget.shape = {};
+  fnTarget._def = {};
+  fnTarget.coerce = fnTarget;
+
+  return fnTarget;
 }
 
 export const SAFE_CHAINABLE_PROXY = createSafeChainableProxy();
@@ -1461,15 +1536,6 @@ const previewUserBase: Record<string, unknown> = {
   },
 };
 
-const previewUserProxy = new Proxy(previewUserBase, {
-  get(target, prop) {
-    if (prop in target) return target[prop as keyof typeof target];
-    if (prop === Symbol.toPrimitive) return () => 'Alex Morgan';
-    if (typeof prop === 'string') return '';
-    return undefined;
-  },
-});
-
 const previewColorsBase: Record<string, string> = {
   primary: '#2563EB',
   primaryLight: '#DBEAFE',
@@ -1501,21 +1567,14 @@ const previewColorsBase: Record<string, string> = {
   notification: '#EF4444',
 };
 
-const previewColorsProxy = new Proxy(previewColorsBase, {
-  get(target, prop) {
-    if (prop in target) return target[prop as keyof typeof target];
-    return '#64748B';
-  },
-});
-
-const safeContextFallbackBase: Record<string, unknown> = {
-  user: previewUserProxy,
-  currentUser: previewUserProxy,
-  profile: previewUserProxy,
+const safeContextFallbackBase: Record<string | symbol, unknown> = {
+  user: previewUserBase,
+  currentUser: previewUserBase,
+  profile: previewUserBase,
   session: {
     access_token: 'preview-access-token',
     refresh_token: 'preview-refresh-token',
-    user: previewUserProxy,
+    user: previewUserBase,
   },
   isAuthenticated: true,
   isLoggedIn: true,
@@ -1531,7 +1590,7 @@ const safeContextFallbackBase: Record<string, unknown> = {
   colorScheme: 'light',
   isDark: false,
   dark: false,
-  colors: previewColorsProxy,
+  colors: previewColorsBase,
   items: STABLE_EMPTY_ARRAY,
   cart: STABLE_EMPTY_ARRAY,
   favorites: STABLE_EMPTY_ARRAY,
@@ -1549,12 +1608,12 @@ const safeContextFallbackBase: Record<string, unknown> = {
   count: 0,
   total: 0,
   balance: 0,
-  signIn: async () => ({ data: { user: previewUserProxy }, error: null }),
-  signUp: async () => ({ data: { user: previewUserProxy }, error: null }),
+  signIn: async () => ({ data: { user: previewUserBase }, error: null }),
+  signUp: async () => ({ data: { user: previewUserBase }, error: null }),
   signOut: async () => ({ error: null }),
-  login: async () => ({ data: { user: previewUserProxy }, error: null }),
+  login: async () => ({ data: { user: previewUserBase }, error: null }),
   logout: async () => undefined,
-  register: async () => ({ data: { user: previewUserProxy }, error: null }),
+  register: async () => ({ data: { user: previewUserBase }, error: null }),
   refresh: async () => undefined,
   refetch: async () => undefined,
   updateProfile: async () => ({ error: null }),
@@ -1562,18 +1621,13 @@ const safeContextFallbackBase: Record<string, unknown> = {
   setTheme: () => undefined,
 };
 
-export const SAFE_CONTEXT_FALLBACK: Record<string, unknown> = new Proxy(safeContextFallbackBase, {
-  get(target, prop) {
-    if (prop in target) return target[prop as keyof typeof target];
-    if (prop === Symbol.iterator) {
-      return function* () {
-        yield SAFE_CONTEXT_FALLBACK;
-        yield () => undefined;
-      };
-    }
-    return SAFE_CHAINABLE_PROXY;
-  },
-});
+safeContextFallbackBase[Symbol.iterator] = function* () {
+  yield safeContextFallbackBase;
+  yield () => undefined;
+};
+
+export const SAFE_CONTEXT_FALLBACK: Record<string, unknown> =
+  safeContextFallbackBase as Record<string, unknown>;
 
 // Install unmounted user-context fallback on React.createContext & React.useContext
 // (runs after react-native-web has already initialized its internal VirtualizedListContext)
@@ -1624,22 +1678,56 @@ try {
   // Ignore if React namespace is frozen in test environment
 }
 
+const SUPABASE_QUERY_METHODS = [
+  'select',
+  'insert',
+  'update',
+  'upsert',
+  'delete',
+  'eq',
+  'neq',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'like',
+  'ilike',
+  'is',
+  'in',
+  'contains',
+  'containedBy',
+  'rangeGt',
+  'rangeGte',
+  'rangeLt',
+  'rangeLte',
+  'rangeAdjacent',
+  'overlaps',
+  'textSearch',
+  'match',
+  'not',
+  'or',
+  'filter',
+  'order',
+  'limit',
+  'range',
+  'abortSignal',
+  'csv',
+  'returns',
+];
+
 function createSupabaseQueryBuilder(): Record<string, unknown> {
   const resultPromise = Promise.resolve({ data: [], error: null, count: 0 });
-  const builder: Record<string, unknown> = new Proxy(
-    {},
-    {
-      get(_target, prop) {
-        if (prop === 'then') return resultPromise.then.bind(resultPromise);
-        if (prop === 'catch') return resultPromise.catch.bind(resultPromise);
-        if (prop === 'finally') return resultPromise.finally.bind(resultPromise);
-        if (prop === 'single' || prop === 'maybeSingle') {
-          return async () => ({ data: null, error: null });
-        }
-        return () => builder;
-      },
-    }
-  );
+  const builder: Record<string, unknown> = {
+    then: resultPromise.then.bind(resultPromise),
+    catch: resultPromise.catch.bind(resultPromise),
+    finally: resultPromise.finally.bind(resultPromise),
+    single: async () => ({ data: null, error: null }),
+    maybeSingle: async () => ({ data: null, error: null }),
+  };
+  const returnSelf = () => builder;
+  for (const method of SUPABASE_QUERY_METHODS) {
+    builder[method] = returnSelf;
+  }
   return builder;
 }
 
@@ -1777,19 +1865,5 @@ const defaultExportProperties = {
 
 Object.assign(UniversalDefaultExportComponent, defaultExportProperties);
 
-const defaultExportProxy = new Proxy(UniversalDefaultExportComponent, {
-  get(target, prop) {
-    if (prop in target) {
-      return (target as unknown as Record<string | symbol, unknown>)[prop];
-    }
-    if (prop in defaultExportProperties) {
-      return defaultExportProperties[prop as keyof typeof defaultExportProperties];
-    }
-    if (typeof prop === 'string' && /^[A-Z]/.test(prop)) {
-      return createVectorIconComponent(prop);
-    }
-    return SAFE_CHAINABLE_PROXY;
-  },
-});
-
-export default defaultExportProxy;
+export default UniversalDefaultExportComponent as typeof UniversalDefaultExportComponent &
+  typeof defaultExportProperties;

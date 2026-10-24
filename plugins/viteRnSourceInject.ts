@@ -1,28 +1,16 @@
 import { parse } from '@babel/parser';
-import _traverse from '@babel/traverse';
 import _generate from '@babel/generator';
 import * as t from '@babel/types';
 import path from 'node:path';
 import type { Plugin } from 'vite';
+import { getJsxTagName, traverse } from '../src/server/astEngine';
 
-// Handle ESM/CJS default export interop for @babel/* packages
-const traverse = (_traverse as unknown as { default?: typeof _traverse }).default ?? _traverse;
+export { getJsxTagName };
+
+// Handle ESM/CJS default export interop for @babel/generator
 const generate = (_generate as unknown as { default?: typeof _generate }).default ?? _generate;
 
 const ALLOWED_SCREEN_PREFIXES = ['src/screens/', 'screens/', 'app/', 'src/app/'];
-
-export function getJsxTagName(nameNode: t.JSXOpeningElement['name']): string {
-  if (t.isJSXIdentifier(nameNode)) {
-    return nameNode.name;
-  }
-  if (t.isJSXMemberExpression(nameNode)) {
-    return `${getJsxTagName(nameNode.object)}.${nameNode.property.name}`;
-  }
-  if (t.isJSXNamespacedName(nameNode)) {
-    return `${nameNode.namespace.name}:${nameNode.name.name}`;
-  }
-  return 'Unknown';
-}
 
 export function viteRnSourceInject(workspaceRoot: string): Plugin {
   const normalizedRoot = path.resolve(workspaceRoot);

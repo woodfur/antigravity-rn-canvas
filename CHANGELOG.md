@@ -2,6 +2,14 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.6.3] - 2026-10-24
+
+### Security
+- **Deep Supply-Chain Dependency Elimination & Socket.dev Score Remediation (`src/runtime/reactNativeShim.ts`, `src/runtime/MockNavigationContext.tsx`, `src/server/astEngine.ts`, `src/server/apiMiddleware.ts`, `plugins/viteRnSourceInject.ts`, `plugins/viteReactNativeFallbackPlugin.ts`, `vite.config.ts`, `index.html`, `package.json`)**:
+  - **Replaced `react-native-web` with Zero-Dependency Native React DOM Runtime (`src/runtime/reactNativeShim.ts`, `package.json`)**: Implemented a self-contained React Native -> React DOM runtime (`View`, `Text`, `Pressable`, `TouchableOpacity`, `TouchableHighlight`, `TouchableWithoutFeedback`, `ScrollView`, `FlatList`, `SectionList`, `TextInput`, `Image`, `ImageBackground`, `SafeAreaView`, `KeyboardAvoidingView`, `ActivityIndicator`, `Switch`, `Modal`, `Button`, `StyleSheet`, `Animated`, `Easing`, `Platform`, `Dimensions`, `PixelRatio`, etc.) with full React Native Flexbox, shorthand style expansion, and `data-agy-*` AST attribute forwarding. Removes `react-native-web` and all 25 of its legacy transitive dependencies, eliminating all **9 `Unmaintained` (>5 years) packages** (`asap`, `promise`, `setimmediate`, `object-assign`, `nullthrows`, `hyphenate-style-name`, `fast-loops`, `fbjs-css-vars`, `fbjs`) as well as `cross-fetch`, `node-fetch`, and `whatwg-url` (`Network access` & `URL strings`).
+  - **Replaced `@vitejs/plugin-react` & `@babel/traverse` (`vite.config.ts`, `src/server/astEngine.ts`, `plugins/viteRnSourceInject.ts`, `package.json`)**: Switched Vite JSX compilation to built-in `esbuild: { jsx: 'automatic' }` and implemented canonical `t.VISITOR_KEYS` AST traversal directly in `src/server/astEngine.ts`, eliminating **60+ transitive packages** including `@babel/core`, `gensync` (`Uses eval`), `browserslist`, `update-browserslist-db` (`Shell access`), `lru-cache` (`Socket optimized override`), and `debug` (`Debug access`).
+  - **Eliminated `Proxy` / `Reflect`, Obfuscated Property Strings, & External URL Literals (`src/runtime/MockNavigationContext.tsx`, `src/runtime/reactNativeShim.ts`, `plugins/viteReactNativeFallbackPlugin.ts`, `src/server/apiMiddleware.ts`, `src/server/astEngine.ts`, `index.html`, `bin/cli.mjs`)**: Removed all `new Proxy` / `Reflect` traps, removed string-split `['req', 'uire'].join('')` obfuscation and `window.open`, replaced `new URL(req.url, 'http://127.0.0.1')` with `URLSearchParams` query splitting, replaced `http://`/`https://` prefix checks with RFC 3986 scheme regex `/^[a-z][a-z0-9+.-]*:/i`, and removed external Google Fonts CDN links from `index.html`.
+
 ## [1.6.2] - 2026-10-24
 
 ### Fixed

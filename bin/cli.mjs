@@ -365,8 +365,7 @@ Usage:
   process.env.ANTIGRAVITY_TARGET_PROJECT = resolvedMobileRoot;
 
   if (isMcpMode) {
-    const mcpBundleUrl = pathToFileURL(path.join(defaultPackageRoot, 'mcp/server.mjs')).href;
-    const { startMcpServer } = await import(mcpBundleUrl);
+    const { startMcpServer } = await import('../mcp/server.mjs');
     startMcpServer(resolvedMobileRoot);
     return;
   }

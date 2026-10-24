@@ -1,6 +1,5 @@
 import { parse } from '@babel/parser';
 import { build, defineConfig, loadEnv } from 'vite';
-import react from '@vitejs/plugin-react';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +21,7 @@ const workspaceRoot = process.env.ANTIGRAVITY_WORKSPACE_ROOT
 
 const targetProjectRoot = findMobileAppRoot(rawTargetRoot);
 const mockNavShimPath = path.resolve(__dirname, 'src/runtime/MockNavigationContext.tsx');
+const reactNativeShimPath = path.resolve(__dirname, 'src/runtime/reactNativeShim.ts');
 
 function safeRealpath(targetPath: string): string {
   try {
@@ -42,7 +42,6 @@ function resolvePackageRootDir(pkgName: string): string {
 
 const resolvedReactDir = resolvePackageRootDir('react');
 const resolvedReactDomDir = resolvePackageRootDir('react-dom');
-const resolvedRnWebDir = resolvePackageRootDir('react-native-web');
 const resolvedLucideDir = resolvePackageRootDir('lucide-react');
 
 function loadPublicProjectEnv(roots: string[]): Record<string, string> {
@@ -288,7 +287,6 @@ export default defineConfig({
     viteReactNativeFallbackPlugin(targetProjectRoot, mockNavShimPath, workspaceRoot),
     viteVirtualScreensPlugin(targetProjectRoot),
     viteRnSourceInject(targetProjectRoot),
-    react(),
     viteCanvasApiMiddleware(targetProjectRoot),
   ],
   optimizeDeps: {
@@ -299,22 +297,23 @@ export default defineConfig({
       'react/jsx-dev-runtime',
       'react-dom',
       'react-dom/client',
-      'react-native-web',
       'lucide-react',
     ],
   },
   esbuild: {
     // Ensure .tsx/.ts/.jsx/.js files (including RN .js files with JSX) are transpiled cleanly
+    jsx: 'automatic',
     include: /\.(tsx|ts|jsx|js)$/,
     exclude: [],
     loader: 'tsx',
   },
   resolve: {
-    dedupe: ['react', 'react-dom', 'react-native-web'],
+    dedupe: ['react', 'react-dom'],
     alias: {
       react: resolvedReactDir,
       'react-dom': resolvedReactDomDir,
-      'react-native-web': resolvedRnWebDir,
+      'react-native': reactNativeShimPath,
+      'react-native-web': reactNativeShimPath,
       'lucide-react': resolvedLucideDir,
     },
     extensions: ['.web.tsx', '.web.ts', '.web.js', '.tsx', '.ts', '.jsx', '.js'],
