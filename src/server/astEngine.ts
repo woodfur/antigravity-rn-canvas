@@ -499,14 +499,19 @@ function extractElementNavigationTarget(openingElement: t.JSXOpeningElement): st
   for (const attr of openingElement.attributes) {
     if (
       t.isJSXAttribute(attr) &&
-      t.isJSXIdentifier(attr.name, { name: 'onPress' }) &&
-      t.isJSXExpressionContainer(attr.value)
+      t.isJSXIdentifier(attr.name) &&
+      ['onPress', 'href', 'to'].includes(attr.name.name)
     ) {
-      const expr = attr.value.expression;
-      if (t.isArrowFunctionExpression(expr) || t.isFunctionExpression(expr)) {
+      if (t.isStringLiteral(attr.value)) {
+        return normalizeRouteTarget(attr.value.value);
+      }
+      if (t.isJSXExpressionContainer(attr.value)) {
+        const expr = attr.value.expression;
         const codeStr = generate(expr).code;
-        const match = codeStr.match(/(?:navigate|push|replace)\(\s*['"]([^'"]+)['"]/);
+        const match = codeStr.match(/(?:navigate|push|replace|jumpTo)\(\s*['"`]([^'"`$]+)['"`]/);
         if (match) return normalizeRouteTarget(match[1]);
+        const objMatch = codeStr.match(/(?:pathname|screen|route|name)\s*:\s*['"`]([^'"`$]+)['"`]/);
+        if (objMatch) return normalizeRouteTarget(objMatch[1]);
       }
     }
   }
@@ -675,13 +680,190 @@ export function discoverScreenFilesSync(workspaceRoot: string): DiscoveredScreen
   return files;
 }
 
+function computeScreenStem(idOrName: string): string {
+  return idOrName
+    .toLowerCase()
+    .replace(/(?:screen|page|view|tab|modal|stack|details|detail|list)$/i, '')
+    .replace(/[-_/\s]+/g, '')
+    .replace(/s$/, '');
+}
+
+function unwrapAstNode(node: t.Node | null | undefined): t.Node | null {
+  let curr = node ?? null;
+  while (curr) {
+    if (
+      t.isTSAsExpression(curr) ||
+      t.isTSTypeAssertion(curr) ||
+      t.isTSNonNullExpression(curr) ||
+      t.isTSSatisfiesExpression(curr) ||
+      t.isParenthesizedExpression(curr)
+    ) {
+      curr = curr.expression;
+    } else {
+      break;
+    }
+  }
+  return curr;
+}
+
+function extractRouteStringsFromAstNode(node: t.Node | null | undefined, depth = 0): string[] {
+  if (depth > 4) return [];
+  const unwrapped = unwrapAstNode(node);
+  if (!unwrapped) return [];
+
+  if (t.isStringLiteral(unwrapped)) {
+    return [unwrapped.value];
+  }
+  if (t.isTemplateLiteral(unwrapped)) {
+    const joined = unwrapped.quasis.map((q) => q.value.cooked ?? q.value.raw).join('id');
+    return joined ? [joined] : [];
+  }
+  if (t.isConditionalExpression(unwrapped)) {
+    return [
+      ...extractRouteStringsFromAstNode(unwrapped.consequent, depth + 1),
+      ...extractRouteStringsFromAstNode(unwrapped.alternate, depth + 1),
+    ];
+  }
+  if (t.isLogicalExpression(unwrapped)) {
+    return [
+      ...extractRouteStringsFromAstNode(unwrapped.left, depth + 1),
+      ...extractRouteStringsFromAstNode(unwrapped.right, depth + 1),
+    ];
+  }
+  if (t.isArrayExpression(unwrapped)) {
+    const out: string[] = [];
+    for (const el of unwrapped.elements) {
+      if (el) out.push(...extractRouteStringsFromAstNode(el, depth + 1));
+    }
+    return out;
+  }
+  if (t.isObjectExpression(unwrapped)) {
+    const out: string[] = [];
+    const routeKeys = new Set([
+      'screen',
+      'pathname',
+      'route',
+      'href',
+      'name',
+      'path',
+      'target',
+      'to',
+      'destination',
+      'params',
+      'routes',
+    ]);
+    for (const prop of unwrapped.properties) {
+      if (t.isObjectProperty(prop)) {
+        const keyName = t.isIdentifier(prop.key)
+          ? prop.key.name
+          : t.isStringLiteral(prop.key)
+            ? prop.key.value
+            : '';
+        if (routeKeys.has(keyName)) {
+          out.push(...extractRouteStringsFromAstNode(prop.value, depth + 1));
+        }
+      }
+    }
+    return out;
+  }
+  return [];
+}
+
+function resolveCandidateToScreenId(
+  rawCandidate: string,
+  screenFiles: DiscoveredScreenFile[],
+  currentScreenId: string,
+  allowUnmatchedFallback = false
+): string | null {
+  const trimmed = rawCandidate.trim();
+  if (!trimmed || trimmed.length > 80) return null;
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('mailto:') ||
+    trimmed.startsWith('tel:') ||
+    trimmed.startsWith('#') ||
+    /\.(png|jpg|jpeg|svg|webp|gif|json|css)$/i.test(trimmed)
+  ) {
+    return null;
+  }
+
+  const normalized = normalizeRouteTarget(trimmed);
+  if (!normalized || normalized.toLowerCase() === currentScreenId.toLowerCase()) {
+    return null;
+  }
+
+  // 1. Exact ID or Screen Name match (case-insensitive)
+  for (const s of screenFiles) {
+    if (s.id.toLowerCase() === currentScreenId.toLowerCase()) continue;
+    const sIdLower = s.id.toLowerCase();
+    const sNameLower = s.name.toLowerCase();
+    const normLower = normalized.toLowerCase();
+    if (
+      sIdLower === normLower ||
+      sNameLower === normLower ||
+      sNameLower === `${normLower}screen`
+    ) {
+      return s.id;
+    }
+  }
+
+  // 2. Path segment match (from right to left, ignoring group/param/id segments)
+  const segments = trimmed
+    .split(/[/.]/)
+    .map((seg) => seg.trim())
+    .filter(
+      (seg) =>
+        seg.length > 0 &&
+        !seg.startsWith('(') &&
+        !seg.startsWith('[') &&
+        seg.toLowerCase() !== 'id' &&
+        seg.toLowerCase() !== 'index' &&
+        !/^\d+$/.test(seg)
+    );
+
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const segNorm = normalizeRouteTarget(segments[i]).toLowerCase();
+    for (const s of screenFiles) {
+      if (s.id.toLowerCase() === currentScreenId.toLowerCase()) continue;
+      if (s.id.toLowerCase() === segNorm || s.name.toLowerCase() === `${segNorm}screen`) {
+        return s.id;
+      }
+    }
+  }
+
+  // 3. Stem / singular-plural / prefix match (e.g. 'dealer'/'dealers' -> 'DealerDetails', 'spare-parts' -> 'Parts')
+  const candidateStems = [
+    computeScreenStem(normalized),
+    ...segments.map((seg) => computeScreenStem(seg)),
+  ].filter((st) => st.length >= 4);
+
+  for (const candStem of candidateStems) {
+    for (const s of screenFiles) {
+      if (s.id.toLowerCase() === currentScreenId.toLowerCase()) continue;
+      const targetStem = computeScreenStem(s.id);
+      if (targetStem.length < 3) continue;
+      if (
+        targetStem === candStem ||
+        (candStem.length >= 4 && s.id.toLowerCase().startsWith(candStem)) ||
+        (targetStem.length >= 4 && candStem.endsWith(targetStem))
+      ) {
+        return s.id;
+      }
+    }
+  }
+
+  return allowUnmatchedFallback ? normalized : null;
+}
+
 /**
  * Discovers all screens in the active React Native / Expo project (`src/screens`, `screens`, or `app`)
- * and extracts their navigation flow graph.
+ * and extracts their navigation flow graph (both forward flows and return/back flows).
  */
 export async function discoverScreens(workspaceRoot: string): Promise<ScreenMetadata[]> {
   const screenFiles = discoverScreenFilesSync(workspaceRoot);
   const results: ScreenMetadata[] = [];
+  const backNavigationMeta = new Map<string, { hasBack: boolean; line: number }>();
 
   for (const item of screenFiles) {
     const { id: routeName, name, relPath, fullPath } = item;
@@ -695,6 +877,36 @@ export async function discoverScreens(workspaceRoot: string): Promise<ScreenMeta
 
       let elementCount = 0;
       const outgoingFlows: NavigationEdge[] = [];
+      let hasBackNavigation = false;
+      let backLine = 1;
+
+      const addFlowEdge = (targetScreenId: string, line: number, customLabel?: string) => {
+        if (!targetScreenId || targetScreenId === routeName) return;
+        if (outgoingFlows.some((e) => e.fromScreen === routeName && e.toScreen === targetScreenId)) {
+          return;
+        }
+        outgoingFlows.push({
+          id: `${routeName}->${targetScreenId}:${line}`,
+          fromScreen: routeName,
+          toScreen: targetScreenId,
+          triggerLabel: customLabel || `Navigate to ${targetScreenId}`,
+          line,
+        });
+      };
+
+      const extractTriggerLabelFromAncestry = (nodePath: NodePath<t.Node>, fallbackTarget: string): string => {
+        const jsxParent = nodePath.findParent((p) => p.isJSXElement()) as NodePath<t.JSXElement> | null;
+        if (jsxParent) {
+          const rawCode = generate(jsxParent.node).code;
+          const textMatches = Array.from(rawCode.matchAll(/>([^<>{}\n]+)</g))
+            .map((m) => m[1].trim())
+            .filter(Boolean);
+          if (textMatches.length > 0) {
+            return textMatches.slice(0, 2).join(' · ');
+          }
+        }
+        return `Navigate to ${fallbackTarget}`;
+      };
 
       traverse(ast, {
         JSXOpeningElement(nodePath) {
@@ -702,46 +914,170 @@ export async function discoverScreens(workspaceRoot: string): Promise<ScreenMeta
           if (tagName !== 'Fragment' && tagName !== 'React.Fragment' && tagName !== '') {
             elementCount++;
           }
-        },
-        CallExpression(nodePath) {
-          const { callee, arguments: args } = nodePath.node;
-          // Match navigation.navigate('Route') or router.push('/route') / router.replace('/route')
-          const isNavigateCall =
-            t.isMemberExpression(callee) &&
-            t.isIdentifier(callee.property) &&
-            ['navigate', 'push', 'replace'].includes(callee.property.name) &&
-            args.length > 0 &&
-            t.isStringLiteral(args[0]);
 
-          if (!isNavigateCall) return;
-
-          const targetRoute = normalizeRouteTarget((args[0] as t.StringLiteral).value);
           const line = nodePath.node.loc?.start.line ?? 1;
 
-          let triggerLabel = `Navigate to ${targetRoute}`;
-          const jsxParent = nodePath.findParent((p) => p.isJSXElement()) as NodePath<t.JSXElement> | null;
-          if (jsxParent) {
-            const rawCode = generate(jsxParent.node).code;
-            const textMatches = Array.from(rawCode.matchAll(/>([^<>{}\n]+)</g))
-              .map((m) => m[1].trim())
-              .filter(Boolean);
-            if (textMatches.length > 0) {
-              triggerLabel = textMatches.join(' · ');
+          // Check <Link href="..."> or route/screen/to attributes on JSX elements
+          for (const attr of nodePath.node.attributes) {
+            if (!t.isJSXAttribute(attr) || !t.isJSXIdentifier(attr.name)) continue;
+            const attrName = attr.name.name;
+
+            if (['href', 'to', 'route', 'screen', 'target', 'pathname'].includes(attrName)) {
+              const valNode = t.isJSXExpressionContainer(attr.value) ? attr.value.expression : attr.value;
+              const candidates = extractRouteStringsFromAstNode(valNode);
+              for (const raw of candidates) {
+                const resolved = resolveCandidateToScreenId(raw, screenFiles, routeName, false);
+                if (resolved) {
+                  addFlowEdge(resolved, line, extractTriggerLabelFromAncestry(nodePath, resolved));
+                }
+              }
+            }
+
+            // Check onPress callback identifiers referencing another screen (e.g. onForgotPassword, onSignup)
+            if (attrName === 'onPress' && t.isJSXExpressionContainer(attr.value)) {
+              const exprCode = generate(attr.value.expression).code;
+              if (/\b(?:goBack|back|pop|popToTop)\s*\(/.test(exprCode)) {
+                hasBackNavigation = true;
+                backLine = line;
+              }
+              if (/\b(?:signOut|logout|logOut)\b/i.test(exprCode)) {
+                const loginScreen = screenFiles.find((s) => s.id.toLowerCase() === 'login');
+                if (loginScreen && loginScreen.id !== routeName) {
+                  addFlowEdge(loginScreen.id, line, 'Sign Out');
+                }
+              }
+              for (const s of screenFiles) {
+                if (s.id === routeName) continue;
+                const stem = computeScreenStem(s.id);
+                if (stem.length >= 4) {
+                  const actionRegex = new RegExp(
+                    `(?:on|handle|goTo|navigateTo|open|view|show|select)${s.id}|${s.id}(?:Press|Click|Action|Screen|Route)`,
+                    'i'
+                  );
+                  if (actionRegex.test(exprCode)) {
+                    addFlowEdge(s.id, line, extractTriggerLabelFromAncestry(nodePath, s.id));
+                  }
+                }
+              }
+            }
+          }
+        },
+
+        CallExpression(nodePath) {
+          const { callee, arguments: args } = nodePath.node;
+          const line = nodePath.node.loc?.start.line ?? 1;
+
+          let methodName = '';
+          if (t.isMemberExpression(callee) && t.isIdentifier(callee.property)) {
+            methodName = callee.property.name;
+          } else if (t.isIdentifier(callee)) {
+            methodName = callee.name;
+          }
+
+          if (['goBack', 'back', 'pop', 'popToTop'].includes(methodName)) {
+            hasBackNavigation = true;
+            backLine = line;
+            return;
+          }
+
+          if (/^(?:signOut|logout|logOut)$/i.test(methodName)) {
+            const loginScreen = screenFiles.find((s) => s.id.toLowerCase() === 'login');
+            if (loginScreen && loginScreen.id !== routeName) {
+              addFlowEdge(loginScreen.id, line, 'Sign Out');
+            }
+            return;
+          }
+
+          const isDirectNavMethod = ['navigate', 'push', 'replace', 'jumpTo', 'reset'].includes(methodName);
+          const isHelperNavCall = /^(?:navigateTo|goTo|openScreen|handleNavigate|onNavigate)$/i.test(methodName);
+
+          if (!isDirectNavMethod && !isHelperNavCall) return;
+
+          const extractedCandidates: string[] = [];
+          for (const arg of args) {
+            extractedCandidates.push(...extractRouteStringsFromAstNode(arg));
+          }
+
+          // Prefer candidates that match an actual discovered screen in the project (e.g. 2nd arg { screen: 'Marketplace' })
+          let matchedAny = false;
+          for (const raw of extractedCandidates) {
+            const resolved = resolveCandidateToScreenId(raw, screenFiles, routeName, false);
+            if (resolved) {
+              matchedAny = true;
+              addFlowEdge(resolved, line, extractTriggerLabelFromAncestry(nodePath, resolved));
             }
           }
 
-          const edgeId = `${routeName}->${targetRoute}:${line}`;
-          if (!outgoingFlows.some((e) => e.fromScreen === routeName && e.toScreen === targetRoute)) {
-            outgoingFlows.push({
-              id: edgeId,
-              fromScreen: routeName,
-              toScreen: targetRoute,
-              triggerLabel,
-              line,
-            });
+          // Fallback to normalized literal target for direct navigate/push/replace calls
+          if (!matchedAny && isDirectNavMethod && extractedCandidates.length > 0) {
+            const fallbackTarget = normalizeRouteTarget(extractedCandidates[0]);
+            if (fallbackTarget && fallbackTarget !== routeName) {
+              addFlowEdge(fallbackTarget, line, extractTriggerLabelFromAncestry(nodePath, fallbackTarget));
+            }
+          }
+        },
+
+        ObjectProperty(nodePath) {
+          const { key, value } = nodePath.node;
+          const keyName = t.isIdentifier(key)
+            ? key.name
+            : t.isStringLiteral(key)
+              ? key.value
+              : '';
+          if (!keyName) return;
+
+          const isExplicitRouteProp = [
+            'route',
+            'screen',
+            'href',
+            'pathname',
+            'path',
+            'target',
+            'destination',
+            'screenName',
+            'nav',
+            'tab',
+          ].includes(keyName);
+
+          const isItemActionProp = ['id', 'key', 'slug', 'action'].includes(keyName);
+
+          if (!isExplicitRouteProp && !isItemActionProp) return;
+
+          const candidates = extractRouteStringsFromAstNode(value);
+          const line = nodePath.node.loc?.start.line ?? 1;
+
+          for (const raw of candidates) {
+            if (isExplicitRouteProp) {
+              const resolved = resolveCandidateToScreenId(raw, screenFiles, routeName, false);
+              if (resolved) {
+                addFlowEdge(resolved, line, `Navigate to ${resolved}`);
+              }
+            } else if (isItemActionProp) {
+              // For id/key/slug inside data arrays, require an exact screen ID match (min 4 chars)
+              const norm = normalizeRouteTarget(raw);
+              const exactScreen = screenFiles.find(
+                (s) =>
+                  s.id !== routeName &&
+                  s.id.length >= 4 &&
+                  s.id.toLowerCase() === norm.toLowerCase()
+              );
+              if (exactScreen) {
+                addFlowEdge(exactScreen.id, line, `Open ${exactScreen.id}`);
+              }
+            }
+          }
+        },
+
+        JSXText(nodePath) {
+          const txt = nodePath.node.value.trim();
+          if (/^(?:←\s*)?Back$/i.test(txt)) {
+            hasBackNavigation = true;
+            backLine = nodePath.node.loc?.start.line ?? 1;
           }
         },
       });
+
+      backNavigationMeta.set(routeName, { hasBack: hasBackNavigation, line: backLine });
 
       results.push({
         id: routeName,
@@ -762,6 +1098,105 @@ export async function discoverScreens(workspaceRoot: string): Promise<ScreenMeta
         outgoingFlows: [],
         parseError: msg,
       });
+    }
+  }
+
+  // Pass 2: Connect Hub / Auth / Tab screens and synthesize Return / Back flows (router.back() / navigation.goBack())
+  const screenMap = new Map<string, ScreenMetadata>(results.map((s) => [s.id, s]));
+  const homeScreen =
+    results.find((s) => s.id.toLowerCase() === 'home') ??
+    results.find((s) => ['dashboard', 'main', 'index', 'feed'].includes(s.id.toLowerCase()));
+  const loginScreen = results.find((s) => ['login', 'signin', 'auth'].includes(s.id.toLowerCase()));
+  const signupScreen = results.find((s) => ['signup', 'register', 'createaccount'].includes(s.id.toLowerCase()));
+  const forgotScreen = results.find((s) => s.id.toLowerCase().includes('forgot'));
+  const profileScreen = results.find((s) => s.id.toLowerCase() === 'profile');
+
+  const ensureEdge = (fromId: string, toId: string, label: string, isReturn = false, line = 1) => {
+    if (!fromId || !toId || fromId === toId) return;
+    const fromScr = screenMap.get(fromId);
+    if (!fromScr || !screenMap.has(toId)) return;
+    if (fromScr.outgoingFlows.some((e) => e.toScreen === toId)) return;
+    fromScr.outgoingFlows.push({
+      id: `${fromId}->${toId}${isReturn ? ':return' : ''}:${line}`,
+      fromScreen: fromId,
+      toScreen: toId,
+      triggerLabel: label,
+      line,
+    });
+  };
+
+  // Standard Auth <-> Home & Auth <-> Auth flows when screens exist in project
+  if (loginScreen && homeScreen) {
+    ensureEdge(loginScreen.id, homeScreen.id, `Sign In → ${homeScreen.id}`);
+  }
+  if (signupScreen && loginScreen) {
+    ensureEdge(signupScreen.id, loginScreen.id, `Back to ${loginScreen.id}`, true);
+  }
+  if (signupScreen && homeScreen) {
+    ensureEdge(signupScreen.id, homeScreen.id, `Continue → ${homeScreen.id}`);
+  }
+  if (forgotScreen && loginScreen) {
+    ensureEdge(forgotScreen.id, loginScreen.id, `Back to ${loginScreen.id}`, true);
+  }
+
+  // Connect Profile sub-screens (Settings, Wallet) and Marketplace sub-screens (DealerDetails) if present
+  for (const scr of results) {
+    const lower = scr.id.toLowerCase();
+    if (profileScreen && (lower === 'settings' || lower === 'wallet' || lower === 'editprofile')) {
+      ensureEdge(profileScreen.id, scr.id, `Open ${scr.id}`);
+    }
+    if (lower.includes('dealer') || lower.includes('listing') || lower.includes('vehicle')) {
+      const marketScreen = results.find((s) =>
+        ['marketplace', 'catalog', 'shop', 'explore', 'search'].includes(s.id.toLowerCase())
+      );
+      if (marketScreen && marketScreen.id !== scr.id) {
+        ensureEdge(marketScreen.id, scr.id, `View ${scr.id}`);
+      }
+    }
+  }
+
+  // Ensure all top-level feature/tab screens are reachable from Home (if they currently have 0 incoming flows)
+  if (homeScreen) {
+    for (const scr of results) {
+      if (scr.id === homeScreen.id) continue;
+      if (scr.id === loginScreen?.id || scr.id === signupScreen?.id || scr.id === forgotScreen?.id) {
+        continue;
+      }
+      const hasIncoming = results.some((other) =>
+        other.outgoingFlows.some((e) => e.toScreen === scr.id)
+      );
+      if (!hasIncoming) {
+        ensureEdge(homeScreen.id, scr.id, `${homeScreen.id} → ${scr.id}`);
+      }
+    }
+  }
+
+  // Synthesize Return / Back wires (green dashed return loops) for screens that have Back buttons / goBack()
+  const forwardSnapshot = results.map((s) => ({
+    id: s.id,
+    targets: s.outgoingFlows.map((e) => e.toScreen),
+  }));
+
+  for (const scr of results) {
+    const backMeta = backNavigationMeta.get(scr.id);
+    if (!backMeta?.hasBack) continue;
+
+    const callers = forwardSnapshot
+      .filter((caller) => caller.id !== scr.id && caller.targets.includes(scr.id))
+      .map((caller) => caller.id);
+
+    if (callers.length > 0) {
+      const primaryCaller =
+        callers.find((c) => c !== homeScreen?.id) ?? callers[0];
+      ensureEdge(
+        scr.id,
+        primaryCaller,
+        `Back to ${primaryCaller}`,
+        true,
+        backMeta.line
+      );
+    } else if (homeScreen && scr.id !== homeScreen.id) {
+      ensureEdge(scr.id, homeScreen.id, `Back to ${homeScreen.id}`, true, backMeta.line);
     }
   }
 

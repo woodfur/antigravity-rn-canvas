@@ -2,6 +2,16 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.5.8] - 2026-10-24
+
+### Fixed
+- **Universal Forward & Return Navigation Flow Wire Extraction (`src/server/astEngine.ts`)**:
+  - Upgraded `discoverScreens` to unwrap TypeScript assertions (`as any`, `as never`, `<any>`, `satisfies`), extract route targets from `TemplateLiteral` (e.g., `` `/dealers/${id}` ``), `ObjectExpression` (`{ pathname, screen, route, name }`), nested React Navigation 2nd-arg `{ screen: '...' }`, `<Link href="...">`, data-driven route arrays (`route`, `screen`, `href`, `pathname`, `id`), `onPress` callback identifiers, and `signOut`/`logout` calls.
+  - Added `resolveCandidateToScreenId` to match extracted routes against discovered project screens (exact, path segment, and stem/singular-plural matching) so `edge.toScreen` always matches a valid screen ID in `layout`.
+  - Added automatic Return / Back flow wire synthesis (`:return`) for screens calling `router.back()`, `navigation.goBack()`, `navigation.pop()`, or rendering a `Back` header button, plus hub/auth/tab connectivity so all screens have complete forward and return interconnection wires.
+- **2D Multi-Row Grid Wire Routing & Dual-Color (Blue Forward + Green Return/Active) Visibility (`src/canvas/FlowArrowsLayer.tsx`, `src/canvas/CanvasApp.tsx`)**:
+  - Updated `FlowArrowsLayer` to render **Blue/Indigo (`#6366F1`) solid wires** for forward flows and **Emerald/Green (`#10B981`) dashed/highlighted wires** for return/back and active screen flows simultaneously, elevated `zIndex: 25` so cross-row wires and `From → To` badges are never hidden behind artboard cards, and added 2D row-aware cubic-Bezier routing with exact `t = 0.5` Bezier midpoint badge placement.
+
 ## [1.5.7] - 2026-10-24
 
 ### Added

@@ -35,8 +35,8 @@ import type { PatchPayload, ReorderPayload } from '../server/astEngine';
 
 const DEFAULT_WIDTH = 393;
 const DEFAULT_HEIGHT = 852;
-const ARTBOARD_GAP = 130;
-const ARTBOARD_ROW_GAP = 140;
+const ARTBOARD_GAP = 160;
+const ARTBOARD_ROW_GAP = 220;
 const INITIAL_OFFSET_X = 80;
 const INITIAL_OFFSET_Y = 70;
 const MIN_ZOOM = 0.08;
@@ -241,6 +241,11 @@ export const CanvasApp: React.FC = () => {
         }
         const sorted = sortScreensByOrder(screensJson.screens);
         setScreens(sorted);
+        setActiveScreenId((prev) => {
+          if (prev && sorted.some((s) => s.id === prev)) return prev;
+          const home = sorted.find((s) => s.id.toLowerCase() === 'home');
+          return home ? home.id : (sorted[0]?.id ?? null);
+        });
         if (screensJson.history) {
           setHistoryState(screensJson.history);
         }

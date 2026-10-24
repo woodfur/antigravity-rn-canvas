@@ -529,4 +529,129 @@ describe('Antigravity React Native Visual Canvas — AST Engine', () => {
     expect(twStyle?.width).toBe(128);
     expect(twStyle?.height).toBe(128);
   });
+
+  it('extracts forward and return/back flow wires from TS assertions, template literals, data arrays, and router.back()', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zelune-flows-'));
+    try {
+      const screensDir = path.join(tmpDir, 'src', 'screens');
+      fs.mkdirSync(screensDir, { recursive: true });
+
+      fs.writeFileSync(
+        path.join(screensDir, 'HomeScreen.tsx'),
+        `
+        import React from 'react';
+        import { View, Pressable, Text } from 'react-native';
+        const QUICK_ACTIONS = [
+          { id: 'parts', route: '/(tabs)/parts' },
+          { id: 'rides', screen: 'RidesScreen' },
+        ];
+        export default function HomeScreen({ router, navigation }: any) {
+          return (
+            <View>
+              <Pressable onPress={() => router.push('/(tabs)/marketplace' as any)}>
+                <Text>Buy Cars</Text>
+              </Pressable>
+              <Pressable onPress={() => navigation.navigate('MainTabs', { screen: 'Parts' })}>
+                <Text>Spare Parts</Text>
+              </Pressable>
+            </View>
+          );
+        }
+        `,
+        'utf-8'
+      );
+
+      fs.writeFileSync(
+        path.join(screensDir, 'MarketplaceScreen.tsx'),
+        `
+        import React from 'react';
+        import { View, Pressable, Text } from 'react-native';
+        export default function MarketplaceScreen({ router }: any) {
+          const id = '123';
+          return (
+            <View>
+              <Pressable onPress={() => router.back()}>
+                <Text>← Back</Text>
+              </Pressable>
+              <Pressable onPress={() => router.push(\`/dealers/\${id}\` as any)}>
+                <Text>View Dealer</Text>
+              </Pressable>
+            </View>
+          );
+        }
+        `,
+        'utf-8'
+      );
+
+      fs.writeFileSync(
+        path.join(screensDir, 'DealerDetailsScreen.tsx'),
+        `
+        import React from 'react';
+        import { View, Pressable, Text } from 'react-native';
+        export default function DealerDetailsScreen({ navigation }: any) {
+          return (
+            <View>
+              <Pressable onPress={() => navigation.goBack()}>
+                <Text>Back</Text>
+              </Pressable>
+            </View>
+          );
+        }
+        `,
+        'utf-8'
+      );
+
+      fs.writeFileSync(
+        path.join(screensDir, 'PartsScreen.tsx'),
+        `
+        import React from 'react';
+        import { View, Pressable, Text } from 'react-native';
+        export default function PartsScreen({ router }: any) {
+          return (
+            <View>
+              <Pressable onPress={() => router.back()}>
+                <Text>Back</Text>
+              </Pressable>
+            </View>
+          );
+        }
+        `,
+        'utf-8'
+      );
+
+      fs.writeFileSync(
+        path.join(screensDir, 'RidesScreen.tsx'),
+        `
+        import React from 'react';
+        import { View } from 'react-native';
+        export default function RidesScreen() {
+          return <View />;
+        }
+        `,
+        'utf-8'
+      );
+
+      const discovered = await discoverScreens(tmpDir);
+      const byId = Object.fromEntries(discovered.map((s) => [s.id, s]));
+
+      // Home connects forward to Marketplace, Parts, Rides
+      const homeTargets = byId.Home.outgoingFlows.map((f) => f.toScreen);
+      expect(homeTargets).toContain('Marketplace');
+      expect(homeTargets).toContain('Parts');
+      expect(homeTargets).toContain('Rides');
+
+      // Marketplace connects forward to DealerDetails (from template literal `/dealers/${id}`) and returns to Home (from router.back())
+      const marketTargets = byId.Marketplace.outgoingFlows.map((f) => f.toScreen);
+      expect(marketTargets).toContain('DealerDetails');
+      expect(marketTargets).toContain('Home');
+      expect(byId.Marketplace.outgoingFlows.some((f) => f.id.includes(':return'))).toBe(true);
+
+      // DealerDetails returns to Marketplace (from navigation.goBack())
+      const dealerTargets = byId.DealerDetails.outgoingFlows.map((f) => f.toScreen);
+      expect(dealerTargets).toContain('Marketplace');
+      expect(byId.DealerDetails.outgoingFlows.some((f) => f.id.includes(':return'))).toBe(true);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
