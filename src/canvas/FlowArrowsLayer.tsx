@@ -4,236 +4,295 @@ import type { ArtboardLayoutMap, NavigationEdge, ScreenMetadata } from './types'
 interface FlowArrowsLayerProps {
   screens: ScreenMetadata[];
   layout: ArtboardLayoutMap;
-  activeScreenId: string | null;
+  screenFlowMap?: Record<string, string>;
+  spotlightScreenId: string | null;
   highlightedScreenId: string | null;
   onSelectFlow?: (edge: NavigationEdge) => void;
 }
 
 const ARTBOARD_HEADER_OFFSET = 38;
 
-export const FlowArrowsLayer: React.FC<FlowArrowsLayerProps> = React.memo(({
-  screens,
-  layout,
-  activeScreenId,
-  highlightedScreenId,
-  onSelectFlow,
-}) => {
-  const edges: NavigationEdge[] = [];
-  for (const screen of screens) {
-    for (const edge of screen.outgoingFlows) {
-      if (layout[edge.fromScreen] && layout[edge.toScreen]) {
-        edges.push(edge);
-      }
-    }
+function formatCompactStepLabel(edge: NavigationEdge, isAdjacentForward: boolean): string {
+  if (!isAdjacentForward) {
+    return `${edge.fromScreen} → ${edge.toScreen}`;
   }
+  const raw = edge.triggerLabel.trim();
+  const stripped = raw
+    .replace(/^(?:Navigate|Continue|Go|Open|View)\s*(?:to|→)?\s+/i, '')
+    .trim();
+  if (
+    stripped &&
+    stripped.toLowerCase() !== edge.toScreen.toLowerCase() &&
+    stripped.length <= 24
+  ) {
+    return `${stripped} →`;
+  }
+  return `→ ${edge.toScreen}`;
+}
 
-  if (edges.length === 0) return null;
+export const FlowArrowsLayer: React.FC<FlowArrowsLayerProps> = React.memo(
+  ({
+    screens,
+    layout,
+    screenFlowMap,
+    spotlightScreenId,
+    highlightedScreenId,
+    onSelectFlow,
+  }) => {
+    const effectiveSpotlight = highlightedScreenId ?? spotlightScreenId;
 
-  return (
-    <svg
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: 8000,
-        height: 6000,
-        pointerEvents: 'none',
-        overflow: 'visible',
-        zIndex: 5,
-      }}
-    >
-      <defs>
-        <marker
-          id="flow-arrow-default"
-          viewBox="0 0 10 10"
-          refX="8"
-          refY="5"
-          markerWidth="6.5"
-          markerHeight="6.5"
-          orient="auto-start-reverse"
-        >
-          <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="#6366F1" />
-        </marker>
-        <marker
-          id="flow-arrow-active"
-          viewBox="0 0 10 10"
-          refX="8"
-          refY="5"
-          markerWidth="7"
-          markerHeight="7"
-          orient="auto-start-reverse"
-        >
-          <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="#10B981" />
-        </marker>
-      </defs>
+    const visibleEdges: Array<{
+      edge: NavigationEdge;
+      sameRow: boolean;
+      isReturnOrBackward: boolean;
+      isHighlighted: boolean;
+    }> = [];
 
-      {edges.map((edge, idx) => {
+    for (const screen of screens) {
+      for (const edge of screen.outgoingFlows) {
         const fromBox = layout[edge.fromScreen];
         const toBox = layout[edge.toScreen];
-        if (!fromBox || !toBox) return null;
+        if (!fromBox || !toBox) continue;
 
         const sameRow = Math.abs(toBox.y - fromBox.y) < 180;
+        const trimmedTrigger = edge.triggerLabel.trim();
         const isExplicitReturn =
-          edge.id.includes(':return') || edge.triggerLabel.startsWith('Back to ');
+          edge.id.includes(':return') ||
+          /^(?:←|‹|<)\s*/.test(trimmedTrigger) ||
+          /^(?:back|return|go\s+back)\b/i.test(trimmedTrigger);
         const isReturnOrBackward =
           isExplicitReturn || (sameRow ? toBox.x < fromBox.x : toBox.y < fromBox.y);
 
-        const isHighlighted =
-          activeScreenId === edge.fromScreen ||
-          highlightedScreenId === edge.toScreen ||
-          activeScreenId === edge.toScreen;
+        const fromFlow = screenFlowMap?.[edge.fromScreen];
+        const toFlow = screenFlowMap?.[edge.toScreen];
+        const isSameFlow =
+          !screenFlowMap || Boolean(fromFlow && toFlow && fromFlow === toFlow);
 
-        // Emerald/Green wires for Return/Back flows AND Active/Highlighted flows; Blue/Indigo wires for Forward flows
-        const useEmeraldWire = isHighlighted || isReturnOrBackward;
+        const isForwardStepInFlow =
+          isSameFlow &&
+          !isExplicitReturn &&
+          (sameRow ? toBox.x > fromBox.x : toBox.y > fromBox.y);
 
-        const verticalSlot = ((idx % 4) - 1.5) * 52;
-        const horizontalSlot = ((idx % 5) - 2) * 38;
+        const isConnectedToSpotlight =
+          Boolean(effectiveSpotlight) &&
+          (edge.fromScreen === effectiveSpotlight || edge.toScreen === effectiveSpotlight);
 
-        let startX: number;
-        let startY: number;
-        let cp1X: number;
-        let cp1Y: number;
-        let cp2X: number;
-        let cp2Y: number;
-        let endX: number;
-        let endY: number;
-
-        if (sameRow) {
-          const horizontalGap = toBox.x - (fromBox.x + fromBox.width);
-          const isAdjacentForward = toBox.x > fromBox.x && horizontalGap <= 240;
-
-          if (isAdjacentForward) {
-            // Directly adjacent neighbors in the same row: connect across the empty vertical alley
-            startX = fromBox.x + fromBox.width;
-            startY = fromBox.y + ARTBOARD_HEADER_OFFSET + fromBox.height * 0.45 + verticalSlot;
-            endX = toBox.x;
-            endY = toBox.y + ARTBOARD_HEADER_OFFSET + toBox.height * 0.36 + verticalSlot * 0.6;
-            const dx = Math.max(60, Math.abs(endX - startX) * 0.45);
-            cp1X = startX + dx;
-            cp1Y = startY;
-            cp2X = endX - dx;
-            cp2Y = endY;
-          } else {
-            // Non-adjacent or return in same row: arch cleanly inside the empty horizontal corridor below the row
-            startX = fromBox.x + fromBox.width * 0.5 + horizontalSlot * 0.5;
-            startY = fromBox.y + ARTBOARD_HEADER_OFFSET + fromBox.height;
-            endX = toBox.x + toBox.width * 0.5 - horizontalSlot * 0.5;
-            endY = toBox.y + ARTBOARD_HEADER_OFFSET + toBox.height;
-            const archDepth = 58 + (idx % 4) * 26;
-            cp1X = startX;
-            cp1Y = startY + archDepth;
-            cp2X = endX;
-            cp2Y = endY + archDepth;
-          }
-        } else if (toBox.y > fromBox.y) {
-          // Cross-row downward connection through the horizontal corridor between rows
-          startX = fromBox.x + fromBox.width * 0.5 + horizontalSlot;
-          startY = fromBox.y + ARTBOARD_HEADER_OFFSET + fromBox.height;
-          endX = toBox.x + toBox.width * 0.5 + horizontalSlot * 0.6;
-          endY = toBox.y;
-          const dy = Math.max(70, Math.min(140, Math.abs(endY - startY) * 0.45));
-          cp1X = startX;
-          cp1Y = startY + dy;
-          cp2X = endX;
-          cp2Y = endY - dy;
-        } else {
-          // Cross-row upward return connection through the horizontal corridor between rows
-          startX = fromBox.x + fromBox.width * 0.5 + horizontalSlot;
-          startY = fromBox.y;
-          endX = toBox.x + toBox.width * 0.5 + horizontalSlot * 0.6;
-          endY = toBox.y + ARTBOARD_HEADER_OFFSET + toBox.height;
-          const dy = Math.max(70, Math.min(140, Math.abs(startY - endY) * 0.45));
-          cp1X = startX;
-          cp1Y = startY - dy;
-          cp2X = endX;
-          cp2Y = endY + dy;
+        // Show clean forward journey steps continuously; spotlight cross-flow & return wires on screen focus
+        if (!isForwardStepInFlow && !isConnectedToSpotlight) {
+          continue;
         }
 
-        const pathD = `M ${startX} ${startY} C ${cp1X} ${cp1Y}, ${cp2X} ${cp2Y}, ${endX} ${endY}`;
-        // Exact cubic Bezier midpoint at t = 0.5
-        const midX = 0.125 * startX + 0.375 * cp1X + 0.375 * cp2X + 0.125 * endX;
-        const midY = 0.125 * startY + 0.375 * cp1Y + 0.375 * cp2Y + 0.125 * endY;
+        visibleEdges.push({
+          edge,
+          sameRow,
+          isReturnOrBackward,
+          isHighlighted: isConnectedToSpotlight,
+        });
+      }
+    }
 
-        const strokeColor = useEmeraldWire ? '#10B981' : '#6366F1';
-        const strokeOpacity = isHighlighted ? 0.98 : 0.82;
+    if (visibleEdges.length === 0) return null;
 
-        return (
-          <g key={edge.id}>
-            {/* Subtle glow path */}
-            {isHighlighted && (
+    const allBoxes = Object.values(layout);
+    const maxRight =
+      allBoxes.length > 0 ? Math.max(...allBoxes.map((b) => b.x + b.width)) : 3400;
+    const maxBottom =
+      allBoxes.length > 0 ? Math.max(...allBoxes.map((b) => b.y + b.height)) : 2400;
+    const svgWidth = Math.max(4000, maxRight + 600);
+    const svgHeight = Math.max(3000, maxBottom + 600);
+
+    return (
+      <svg
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: svgWidth,
+          height: svgHeight,
+          pointerEvents: 'none',
+          overflow: 'visible',
+          zIndex: 5,
+        }}
+      >
+        <defs>
+          <marker
+            id="flow-arrow-default"
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
+            markerWidth="6.5"
+            markerHeight="6.5"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="#6366F1" />
+          </marker>
+          <marker
+            id="flow-arrow-active"
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 1.5 L 8.5 5 L 0 8.5 z" fill="#10B981" />
+          </marker>
+        </defs>
+
+        {visibleEdges.map(({ edge, sameRow, isReturnOrBackward, isHighlighted }, idx) => {
+          const fromBox = layout[edge.fromScreen];
+          const toBox = layout[edge.toScreen];
+          if (!fromBox || !toBox) return null;
+
+          const useEmeraldWire = isHighlighted || isReturnOrBackward;
+          const horizontalGap = toBox.x - (fromBox.x + fromBox.width);
+          const isAdjacentForward = sameRow && toBox.x > fromBox.x && horizontalGap <= 260;
+
+          const verticalSlot = isAdjacentForward ? 0 : ((idx % 4) - 1.5) * 44;
+          const horizontalSlot = ((idx % 5) - 2) * 34;
+
+          let startX: number;
+          let startY: number;
+          let cp1X: number;
+          let cp1Y: number;
+          let cp2X: number;
+          let cp2Y: number;
+          let endX: number;
+          let endY: number;
+
+          if (sameRow) {
+            if (isAdjacentForward) {
+              startX = fromBox.x + fromBox.width;
+              startY = fromBox.y + ARTBOARD_HEADER_OFFSET + fromBox.height * 0.44 + verticalSlot;
+              endX = toBox.x;
+              endY = toBox.y + ARTBOARD_HEADER_OFFSET + toBox.height * 0.44 + verticalSlot;
+              const dx = Math.max(54, Math.abs(endX - startX) * 0.45);
+              cp1X = startX + dx;
+              cp1Y = startY;
+              cp2X = endX - dx;
+              cp2Y = endY;
+            } else {
+              startX = fromBox.x + fromBox.width * 0.5 + horizontalSlot * 0.5;
+              startY = fromBox.y + ARTBOARD_HEADER_OFFSET + fromBox.height;
+              endX = toBox.x + toBox.width * 0.5 - horizontalSlot * 0.5;
+              endY = toBox.y + ARTBOARD_HEADER_OFFSET + toBox.height;
+              const archDepth = 56 + (idx % 4) * 24;
+              cp1X = startX;
+              cp1Y = startY + archDepth;
+              cp2X = endX;
+              cp2Y = endY + archDepth;
+            }
+          } else if (toBox.y > fromBox.y) {
+            startX = fromBox.x + fromBox.width * 0.5 + horizontalSlot;
+            startY = fromBox.y + ARTBOARD_HEADER_OFFSET + fromBox.height;
+            endX = toBox.x + toBox.width * 0.5 + horizontalSlot * 0.6;
+            endY = toBox.y;
+            const dy = Math.max(70, Math.min(140, Math.abs(endY - startY) * 0.45));
+            cp1X = startX;
+            cp1Y = startY + dy;
+            cp2X = endX;
+            cp2Y = endY - dy;
+          } else {
+            startX = fromBox.x + fromBox.width * 0.5 + horizontalSlot;
+            startY = fromBox.y;
+            endX = toBox.x + toBox.width * 0.5 + horizontalSlot * 0.6;
+            endY = toBox.y + ARTBOARD_HEADER_OFFSET + toBox.height;
+            const dy = Math.max(70, Math.min(140, Math.abs(startY - endY) * 0.45));
+            cp1X = startX;
+            cp1Y = startY - dy;
+            cp2X = endX;
+            cp2Y = endY + dy;
+          }
+
+          const pathD = `M ${startX} ${startY} C ${cp1X} ${cp1Y}, ${cp2X} ${cp2Y}, ${endX} ${endY}`;
+          const midX = 0.125 * startX + 0.375 * cp1X + 0.375 * cp2X + 0.125 * endX;
+          const midY = 0.125 * startY + 0.375 * cp1Y + 0.375 * cp2Y + 0.125 * endY;
+
+          const strokeColor = useEmeraldWire ? '#10B981' : '#6366F1';
+          const strokeOpacity = isHighlighted ? 0.98 : 0.86;
+          const badgeLabel = formatCompactStepLabel(edge, isAdjacentForward);
+
+          return (
+            <g key={edge.id}>
+              {isHighlighted && (
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke={strokeColor}
+                  strokeWidth={7}
+                  strokeOpacity={0.22}
+                />
+              )}
+
               <path
                 d={pathD}
                 fill="none"
                 stroke={strokeColor}
-                strokeWidth={7}
-                strokeOpacity={0.22}
+                strokeWidth={isHighlighted ? 2.8 : 2.2}
+                strokeOpacity={strokeOpacity}
+                strokeDasharray={isReturnOrBackward ? '7 5' : undefined}
+                markerEnd={
+                  useEmeraldWire ? 'url(#flow-arrow-active)' : 'url(#flow-arrow-default)'
+                }
               />
-            )}
 
-            {/* Main cubic-bezier connector */}
-            <path
-              d={pathD}
-              fill="none"
-              stroke={strokeColor}
-              strokeWidth={isHighlighted ? 2.8 : 2.15}
-              strokeOpacity={strokeOpacity}
-              strokeDasharray={isReturnOrBackward ? '7 5' : undefined}
-              markerEnd={
-                useEmeraldWire ? 'url(#flow-arrow-active)' : 'url(#flow-arrow-default)'
-              }
-            />
+              <circle
+                cx={startX}
+                cy={startY}
+                r={4.5}
+                fill="var(--studio-surface-1)"
+                stroke={strokeColor}
+                strokeWidth={2.2}
+              />
 
-            {/* Origin anchor dot */}
-            <circle
-              cx={startX}
-              cy={startY}
-              r={4.5}
-              fill="var(--studio-surface-1)"
-              stroke={strokeColor}
-              strokeWidth={2.2}
-            />
-
-            {/* Interactive Flow Label Pill */}
-            <foreignObject
-              x={midX - 85}
-              y={midY - 13}
-              width={170}
-              height={28}
-              style={{ pointerEvents: 'auto', overflow: 'visible' }}
-            >
-              <div
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelectFlow?.(edge);
-                }}
-                title={`${edge.fromScreen} → ${edge.toScreen} (${edge.triggerLabel})`}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 4,
-                  padding: '3px 9px',
-                  borderRadius: 999,
-                  backgroundColor: 'var(--studio-surface-1)',
-                  border: `1px solid ${useEmeraldWire ? 'var(--studio-accent-emerald)' : 'var(--studio-badge-indigo-border)'}`,
-                  color: useEmeraldWire ? 'var(--studio-badge-emerald-text)' : 'var(--studio-badge-indigo-text)',
-                  fontSize: 10,
-                  fontWeight: 600,
-                  fontFamily: 'JetBrains Mono, monospace',
-                  whiteSpace: 'nowrap',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-                  margin: '0 auto',
-                }}
+              <foreignObject
+                x={midX - 74}
+                y={midY - 13}
+                width={148}
+                height={28}
+                style={{ pointerEvents: 'auto', overflow: 'visible' }}
               >
-                <span>{edge.fromScreen}</span>
-                <span>→</span>
-                <span>{edge.toScreen}</span>
-              </div>
-            </foreignObject>
-          </g>
-        );
-      })}
-    </svg>
-  );
-});
+                <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectFlow?.(edge);
+                    }}
+                    title={`${edge.fromScreen} → ${edge.toScreen} (${edge.triggerLabel})`}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      maxWidth: isAdjacentForward ? 138 : 172,
+                      padding: '3px 8px',
+                      borderRadius: 999,
+                      backgroundColor: 'var(--studio-surface-1)',
+                      border: `1px solid ${
+                        useEmeraldWire
+                          ? 'var(--studio-accent-emerald)'
+                          : 'var(--studio-badge-indigo-border)'
+                      }`,
+                      color: useEmeraldWire
+                        ? 'var(--studio-badge-emerald-text)'
+                        : 'var(--studio-badge-indigo-text)',
+                      fontSize: 9.5,
+                      fontWeight: 600,
+                      fontFamily: 'JetBrains Mono, monospace',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                    }}
+                  >
+                    {badgeLabel}
+                  </div>
+                </div>
+              </foreignObject>
+            </g>
+          );
+        })}
+      </svg>
+    );
+  }
+);

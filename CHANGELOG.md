@@ -2,6 +2,15 @@
 
 All notable changes to the **Zelune — React Native Visual Canvas & MCP** project are documented in this file.
 
+## [1.6.6] - 2026-10-25
+
+### Added
+- **Lean User Flow Row Layout & De-Cluttered Journey Connectors — Resolved (`src/canvas/flowLayoutEngine.ts`, `src/canvas/FlowSwimlanesLayer.tsx`, `src/canvas/FlowArrowsLayer.tsx`, `src/canvas/ScreenArtboard.tsx`, `src/canvas/CanvasApp.tsx`, `src/canvas/types.ts`)**:
+  - **Universal User Flow Row Grouping & Left-to-Right Topological Ordering (`src/canvas/flowLayoutEngine.ts`)**: Automatically organizes discovered React Native & Expo Router screens into horizontal flow rows (`Authentication`, explicit feature folders such as `Marketplace` or `Wallet`, connected core journeys named `FirstScreen → LastScreen`, `Account & Profile`, and `Utility Screens`) while ignoring Expo Router shell segments (`(tabs)`, `(main)`, `(app)`). Orders steps strictly left-to-right within each row via cycle-safe Kahn topological sorting.
+  - **Minimalist Row Header Labels (`src/canvas/FlowSwimlanesLayer.tsx`)**: Added quiet, clickable Linear/Figma-style section header pills above the entry screen of each horizontal flow row (`01 · Authentication`, `02 · Home → Checkout`, etc.) to zoom-fit any user journey without dashed bounding-box clutter.
+  - **De-Cluttered Forward Journey Wires & Click Spotlight (`src/canvas/FlowArrowsLayer.tsx`, `src/canvas/CanvasApp.tsx`)**: Continuously displays clean forward intra-flow journey arrows while hiding cross-row and `:return` / `← Back` spaghetti wires until a screen is clicked or focused (spotlighting its cross-flow and return wires in dashed Emerald).
+  - **Grouped Left Screen Rail & Single `Tidy Flows` Action (`src/canvas/CanvasApp.tsx`, `src/canvas/ScreenArtboard.tsx`)**: Grouped the Left Screen Sidebar by detected user flows, persisted custom artboard drags automatically to `.canvas-layout.json`, and provided a single `Tidy Flows` toolbar button to snap screens back into aligned flow rows anytime.
+
 ## [1.6.5] - 2026-10-25
 
 ### Fixed

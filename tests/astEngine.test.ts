@@ -57,6 +57,11 @@ import RNDefault, {
   useWindowDimensions,
 } from '../src/runtime/reactNativeShim';
 import { resolveTailwindClassNameToStyle } from '../src/runtime/nativewindShim';
+import {
+  computeFlowSwimlaneLayout,
+  extractFeatureGroupFromPath,
+  MAX_COLS_PER_SWIMLANE_ROW,
+} from '../src/canvas/flowLayoutEngine';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_ROOT = path.resolve(__dirname, '..');
@@ -844,6 +849,10 @@ describe('Antigravity React Native Visual Canvas — AST Engine', () => {
       'src/server/astEngine.ts',
       'src/server/tsxBrowserCompiler.ts',
       'src/server/studioHttpServer.ts',
+      'src/canvas/flowLayoutEngine.ts',
+      'src/canvas/FlowSwimlanesLayer.tsx',
+      'src/canvas/FlowArrowsLayer.tsx',
+      'src/canvas/CanvasApp.tsx',
       'plugins/viteReactNativeFallbackPlugin.ts',
       'index.html',
     ];
@@ -1016,5 +1025,105 @@ describe('Antigravity React Native Visual Canvas — AST Engine', () => {
     } finally {
       fs.rmSync(tmpRoot, { recursive: true, force: true });
     }
+  });
+
+  it('organizes discovered screens into clean User Flow Swimlanes with cycle-safe left-to-right BFS ordering', async () => {
+    // 1. Edge cases: 0 screens & 1 screen
+    const emptyResult = computeFlowSwimlaneLayout([]);
+    expect(emptyResult.flows).toEqual([]);
+    expect(emptyResult.positions).toEqual({});
+
+    const singleResult = computeFlowSwimlaneLayout([
+      {
+        id: 'Home',
+        title: 'Home',
+        filePath: 'src/screens/HomeScreen.tsx',
+        outgoingFlows: [],
+      },
+    ]);
+    expect(singleResult.flows).toHaveLength(1);
+    expect(singleResult.flows[0].screenIds).toEqual(['Home']);
+    expect(singleResult.positions.Home).toBeDefined();
+
+    // 2. Real 5-screen workspace discovery: Auth, Shopping & Checkout (Home -> ProductDetail -> Checkout), Account & Profile
+    const workspaceScreens = await discoverScreens(WORKSPACE_ROOT);
+    const wsLayout = computeFlowSwimlaneLayout(workspaceScreens);
+
+    expect(wsLayout.flows.map((f) => f.title)).toEqual([
+      'Authentication',
+      'Home → Checkout',
+      'Account & Profile',
+    ]);
+    expect(wsLayout.flows[0].screenIds).toEqual(['Login']);
+    expect(wsLayout.flows[1].screenIds).toEqual(['Home', 'ProductDetail', 'Checkout']);
+    expect(wsLayout.flows[2].screenIds).toEqual(['Profile']);
+
+    // Verify strict left-to-right ordering on the exact same horizontal row for Shopping & Checkout Flow
+    expect(wsLayout.positions.Home.y).toBe(wsLayout.positions.ProductDetail.y);
+    expect(wsLayout.positions.ProductDetail.y).toBe(wsLayout.positions.Checkout.y);
+    expect(wsLayout.positions.Home.x).toBeLessThan(wsLayout.positions.ProductDetail.x);
+    expect(wsLayout.positions.ProductDetail.x).toBeLessThan(wsLayout.positions.Checkout.x);
+
+    // Verify vertical lane separation: Auth row above Shopping row above Account row
+    expect(wsLayout.positions.Login.y).toBeLessThan(wsLayout.positions.Home.y);
+    expect(wsLayout.positions.Home.y).toBeLessThan(wsLayout.positions.Profile.y);
+
+    // 3. Expo Router path extraction ignores navigation shells like (tabs) while honoring feature folders
+    expect(extractFeatureGroupFromPath('app/(tabs)/index.tsx')).toBeNull();
+    expect(extractFeatureGroupFromPath('app/(auth)/login.tsx')).toEqual({
+      slug: 'auth',
+      label: 'Auth',
+    });
+    expect(extractFeatureGroupFromPath('app/marketplace/[id].tsx')).toEqual({
+      slug: 'marketplace',
+      label: 'Marketplace',
+    });
+
+    // 4. Complex 14-screen Expo Router + cyclic edges + >6 screen flow wrapping + standalone orphans
+    const makeEdge = (fromScreen: string, toScreen: string, triggerLabel = 'Continue') => ({
+      id: `${fromScreen}->${toScreen}:1`,
+      fromScreen,
+      toScreen,
+      triggerLabel,
+      line: 1,
+    });
+
+    const complexScreens = [
+      { id: 'Welcome', title: 'Welcome', filePath: 'app/(auth)/welcome.tsx', outgoingFlows: [makeEdge('Welcome', 'Login')] },
+      { id: 'Login', title: 'Login', filePath: 'app/(auth)/login.tsx', outgoingFlows: [makeEdge('Login', 'OtpVerify'), makeEdge('Login', 'Home')] },
+      { id: 'OtpVerify', title: 'OtpVerify', filePath: 'app/(auth)/otp.tsx', outgoingFlows: [makeEdge('OtpVerify', 'Home')] },
+      { id: 'Home', title: 'Home', filePath: 'app/(tabs)/index.tsx', outgoingFlows: [makeEdge('Home', 'Marketplace'), makeEdge('Home', 'Wallet')] },
+      // 7-step Marketplace flow with a cycle (OrderTracking -> Marketplace) to verify cycle-safety & 6-col row wrapping
+      { id: 'Marketplace', title: 'Marketplace', filePath: 'app/(tabs)/marketplace.tsx', outgoingFlows: [makeEdge('Marketplace', 'SearchFilters'), makeEdge('Marketplace', 'VehicleDetail')] },
+      { id: 'SearchFilters', title: 'SearchFilters', filePath: 'app/marketplace/filters.tsx', outgoingFlows: [makeEdge('SearchFilters', 'VehicleDetail')] },
+      { id: 'VehicleDetail', title: 'VehicleDetail', filePath: 'app/marketplace/[id].tsx', outgoingFlows: [makeEdge('VehicleDetail', 'DealerProfile'), makeEdge('VehicleDetail', 'OfferSheet')] },
+      { id: 'DealerProfile', title: 'DealerProfile', filePath: 'app/marketplace/dealer.tsx', outgoingFlows: [makeEdge('DealerProfile', 'VehicleDetail')] },
+      { id: 'OfferSheet', title: 'OfferSheet', filePath: 'app/marketplace/offer.tsx', outgoingFlows: [makeEdge('OfferSheet', 'EscrowCheckout')] },
+      { id: 'EscrowCheckout', title: 'EscrowCheckout', filePath: 'app/marketplace/checkout.tsx', outgoingFlows: [makeEdge('EscrowCheckout', 'OrderTracking')] },
+      { id: 'OrderTracking', title: 'OrderTracking', filePath: 'app/marketplace/tracking.tsx', outgoingFlows: [makeEdge('OrderTracking', 'Marketplace')] },
+      // Wallet feature folder flow
+      { id: 'Wallet', title: 'Wallet', filePath: 'app/wallet/index.tsx', outgoingFlows: [makeEdge('Wallet', 'SendMoney')] },
+      { id: 'SendMoney', title: 'SendMoney', filePath: 'app/wallet/send.tsx', outgoingFlows: [] },
+      // Standalone unlinked utility screen + Account screen
+      { id: 'LegalTerms', title: 'LegalTerms', filePath: 'app/legal.tsx', outgoingFlows: [] },
+      { id: 'Settings', title: 'Settings', filePath: 'app/(tabs)/settings.tsx', outgoingFlows: [makeEdge('Settings', 'Login', 'Sign Out')] },
+    ];
+
+    const complexLayout = computeFlowSwimlaneLayout(complexScreens);
+    expect(complexLayout.orderedScreens).toHaveLength(complexScreens.length);
+
+    const marketFlow = complexLayout.flows.find((f) => f.id === 'flow-marketplace');
+    expect(marketFlow).toBeDefined();
+    expect(marketFlow!.title).toBe('Marketplace');
+    expect(marketFlow!.screenIds).toHaveLength(7);
+    expect(marketFlow!.screenIds[0]).toBe('Marketplace');
+    expect(MAX_COLS_PER_SWIMLANE_ROW).toBe(6);
+    // 7th screen wraps cleanly to a second sub-row below the first 6 screens
+    expect(complexLayout.positions[marketFlow!.screenIds[6]].y).toBeGreaterThan(
+      complexLayout.positions[marketFlow!.screenIds[0]].y
+    );
+
+    const utilityFlow = complexLayout.flows.find((f) => f.id === 'flow-utility');
+    expect(utilityFlow?.screenIds).toEqual(['LegalTerms']);
   });
 });

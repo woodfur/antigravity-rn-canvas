@@ -325,7 +325,7 @@ export async function handleMcpJsonRpcRequest(
           },
           serverInfo: {
             name: 'zelune',
-            version: '1.6.5',
+            version: '1.6.6',
           },
         },
       };

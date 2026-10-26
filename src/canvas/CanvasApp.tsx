@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   MousePointer,
   Play,
   GitCommit,
+  GitBranch,
   Undo2,
   Redo2,
   ZoomIn,
   ZoomOut,
   Maximize,
-  LayoutGrid,
   Layers,
   RefreshCw,
   PanelLeftClose,
@@ -21,15 +21,23 @@ import {
 } from 'lucide-react';
 import {
   SCREEN_COMPONENTS,
-  SCREEN_ORDER,
   getDynamicScreenComponent,
 } from '../screens';
 import { ScreenArtboard } from './ScreenArtboard';
+import { FlowSwimlanesLayer } from './FlowSwimlanesLayer';
 import { FlowArrowsLayer } from './FlowArrowsLayer';
 import { InspectorPanel } from './InspectorPanel';
+import {
+  computeFlowSwimlaneLayout,
+  DEFAULT_ARTBOARD_WIDTH,
+  DEFAULT_ARTBOARD_HEIGHT,
+  FLOW_INITIAL_X,
+  FLOW_INITIAL_Y,
+} from './flowLayoutEngine';
 import type {
   ArtboardLayoutMap,
   CanvasMode,
+  FlowAccentTone,
   InspectedElement,
   NavigationEdge,
   ScreenMetadata,
@@ -43,14 +51,21 @@ import type {
   DeleteElementPayload,
 } from '../server/astEngine';
 
-const DEFAULT_WIDTH = 393;
-const DEFAULT_HEIGHT = 852;
-const ARTBOARD_GAP = 160;
-const ARTBOARD_ROW_GAP = 220;
-const INITIAL_OFFSET_X = 80;
-const INITIAL_OFFSET_Y = 70;
+const DEFAULT_WIDTH = DEFAULT_ARTBOARD_WIDTH;
+const DEFAULT_HEIGHT = DEFAULT_ARTBOARD_HEIGHT;
+const INITIAL_OFFSET_X = FLOW_INITIAL_X;
+const INITIAL_OFFSET_Y = FLOW_INITIAL_Y;
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 2.0;
+
+const FLOW_DOT_COLORS: Record<FlowAccentTone, string> = {
+  sky: '#38BDF8',
+  indigo: '#6366F1',
+  emerald: '#10B981',
+  violet: '#A855F7',
+  amber: '#F59E0B',
+  slate: '#94A3B8',
+};
 
 function clampZoom(z: number): number {
   return Math.min(Math.max(z, MIN_ZOOM), MAX_ZOOM);
@@ -61,31 +76,13 @@ function snapToDevicePixel(v: number): number {
   return Math.round(v * dpr) / dpr;
 }
 
-function buildDefaultLayout(screens: ScreenMetadata[]): ArtboardLayoutMap {
-  const map: ArtboardLayoutMap = {};
-  const cols =
-    screens.length <= 5
-      ? Math.max(1, screens.length)
-      : Math.min(7, Math.ceil(Math.sqrt(screens.length * 1.6)));
-  screens.forEach((screen, idx) => {
-    const col = idx % cols;
-    const row = Math.floor(idx / cols);
-    map[screen.id] = {
-      x: INITIAL_OFFSET_X + col * (DEFAULT_WIDTH + ARTBOARD_GAP),
-      y: INITIAL_OFFSET_Y + row * (DEFAULT_HEIGHT + ARTBOARD_ROW_GAP),
-      width: DEFAULT_WIDTH,
-      height: DEFAULT_HEIGHT,
-    };
-  });
-  return map;
-}
-
 export const CanvasApp: React.FC = () => {
   const [screens, setScreens] = useState<ScreenMetadata[]>([]);
   const [projectName, setProjectName] = useState<string>('Google Artifact');
   const [layout, setLayout] = useState<ArtboardLayoutMap>({});
   const [mode, setMode] = useState<CanvasMode>('inspect');
   const [showFlows, setShowFlows] = useState<boolean>(true);
+  const [hasUserFocusedScreen, setHasUserFocusedScreen] = useState<boolean>(false);
 
   // Collapsible Left (Screen Rail) & Right (AST Inspector) Panels
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState<boolean>(true);
@@ -155,6 +152,19 @@ export const CanvasApp: React.FC = () => {
   const cameraTimerRef = useRef<number | null>(null);
   const panSyncTimerRef = useRef<number | null>(null);
   const hasInitialFitRef = useRef<boolean>(false);
+  const layoutRef = useRef<ArtboardLayoutMap>(layout);
+  useEffect(() => {
+    layoutRef.current = layout;
+  }, [layout]);
+
+  const flowAnalysis = useMemo(() => computeFlowSwimlaneLayout(screens), [screens]);
+  const screenByIdMap = useMemo(() => {
+    const map = new Map<string, ScreenMetadata>();
+    for (const scr of screens) {
+      map.set(scr.id, scr);
+    }
+    return map;
+  }, [screens]);
 
   // Refs for synchronous access inside non-passive native wheel/gesture listeners
   const zoomRef = useRef<number>(zoom);
@@ -217,17 +227,6 @@ export const CanvasApp: React.FC = () => {
     }, 390);
   }, []);
 
-  const sortScreensByOrder = useCallback((rawScreens: ScreenMetadata[]) => {
-    return [...rawScreens].sort((a, b) => {
-      const idxA = SCREEN_ORDER.indexOf(a.id);
-      const idxB = SCREEN_ORDER.indexOf(b.id);
-      if (idxA === -1 && idxB === -1) return a.id.localeCompare(b.id);
-      if (idxA === -1) return 1;
-      if (idxB === -1) return -1;
-      return idxA - idxB;
-    });
-  }, []);
-
   const fetchScreens = useCallback(async () => {
     try {
       const [screensRes, layoutRes] = await Promise.all([
@@ -252,28 +251,50 @@ export const CanvasApp: React.FC = () => {
         if (screensJson.projectName) {
           setProjectName(screensJson.projectName);
         }
-        const sorted = sortScreensByOrder(screensJson.screens);
-        setScreens(sorted);
+        const flowResult = computeFlowSwimlaneLayout(screensJson.screens);
+        const ordered = flowResult.orderedScreens;
+        setScreens(ordered);
         setActiveScreenId((prev) => {
-          if (prev && sorted.some((s) => s.id === prev)) return prev;
-          const home = sorted.find((s) => s.id.toLowerCase() === 'home');
-          return home ? home.id : (sorted[0]?.id ?? null);
+          if (prev && ordered.some((s) => s.id === prev)) return prev;
+          const home = ordered.find((s) => s.id.toLowerCase() === 'home');
+          return home ? home.id : (ordered[0]?.id ?? null);
         });
         if (screensJson.history) {
           setHistoryState(screensJson.history);
         }
 
         setLayout((prev) => {
-          const base = buildDefaultLayout(sorted);
-          const saved = layoutJson.ok && layoutJson.layout ? layoutJson.layout : {};
-          const merged = { ...base, ...saved, ...prev };
-          if (!hasInitialFitRef.current && sorted.length > 0 && canvasViewportRef.current) {
+          const validIds = new Set(ordered.map((s) => s.id));
+          const rawSaved = layoutJson.ok && layoutJson.layout ? layoutJson.layout : {};
+          const isLegacyFlatGrid = Object.values(rawSaved).some(
+            (p) => p.x === 80 && p.y === 70
+          );
+
+          const filteredSaved: ArtboardLayoutMap = {};
+          if (!isLegacyFlatGrid) {
+            for (const [id, pos] of Object.entries(rawSaved)) {
+              if (validIds.has(id)) filteredSaved[id] = pos;
+            }
+          }
+          const filteredPrev: ArtboardLayoutMap = {};
+          for (const [id, pos] of Object.entries(prev)) {
+            if (validIds.has(id)) filteredPrev[id] = pos;
+          }
+
+          const merged: ArtboardLayoutMap = {
+            ...flowResult.positions,
+            ...filteredSaved,
+            ...filteredPrev,
+          };
+          layoutRef.current = merged;
+
+          if (!hasInitialFitRef.current && ordered.length > 0 && canvasViewportRef.current) {
             hasInitialFitRef.current = true;
             const rect = canvasViewportRef.current.getBoundingClientRect();
             const positions = Object.values(merged);
             if (positions.length > 0 && rect.width > 0 && rect.height > 0) {
               const minX = Math.min(...positions.map((p) => p.x));
-              const minY = Math.min(...positions.map((p) => p.y));
+              const minY = Math.min(...positions.map((p) => p.y)) - 52;
               const maxX = Math.max(...positions.map((p) => p.x + p.width));
               const maxY = Math.max(...positions.map((p) => p.y + p.height + 50));
               const contentWidth = maxX - minX + 140;
@@ -299,7 +320,7 @@ export const CanvasApp: React.FC = () => {
     } catch (err) {
       console.error('Failed to load screens metadata:', err);
     }
-  }, [sortScreensByOrder]);
+  }, []);
 
   useEffect(() => {
     void fetchScreens();
@@ -332,10 +353,16 @@ export const CanvasApp: React.FC = () => {
     }
   }, []);
 
+  const handleSelectScreen = useCallback((screenId: string) => {
+    setActiveScreenId(screenId);
+    setHasUserFocusedScreen(true);
+  }, []);
+
   const handleSelectElement = useCallback(
     (ref: SelectedElementRef) => {
       setSelectedElement(ref);
       setActiveScreenId(ref.screenId);
+      setHasUserFocusedScreen(true);
       setIsRightPanelOpen(true);
       void inspectSelectedElement(ref);
     },
@@ -663,6 +690,7 @@ export const CanvasApp: React.FC = () => {
       } else if (e.key === 'Escape') {
         setSelectedElement(null);
         setInspectedData(null);
+        setHasUserFocusedScreen(false);
       }
     };
 
@@ -780,20 +808,25 @@ export const CanvasApp: React.FC = () => {
 
       const rect = viewport.getBoundingClientRect();
       const targetZoom = Math.min(Math.max(zoom, 0.72), 0.95);
-      const nextPanX = rect.width / 2 - (pos.x + pos.width / 2) * targetZoom;
-      const nextPanY = rect.height / 2 - (pos.y + pos.height / 2) * targetZoom;
+      const nextPan = {
+        x: Math.round(rect.width / 2 - (pos.x + pos.width / 2) * targetZoom),
+        y: Math.round(rect.height / 2 - (pos.y + pos.height / 2) * targetZoom),
+      };
 
       triggerCameraTransition();
+      zoomRef.current = targetZoom;
+      panRef.current = nextPan;
       setZoom(targetZoom);
-      setPan({ x: Math.round(nextPanX), y: Math.round(nextPanY) });
+      setPan(nextPan);
       setActiveScreenId(screenId);
+      setHasUserFocusedScreen(true);
       setHighlightedScreenId(screenId);
       window.setTimeout(() => setHighlightedScreenId(null), 1600);
     },
     [layout, zoom, triggerCameraTransition]
   );
 
-  // Fit all screens in viewport
+  // Fit screens or a specific flow sub-layout in viewport
   const fitCameraToLayout = useCallback(
     (targetLayout: ArtboardLayoutMap) => {
       const viewport = canvasViewportRef.current;
@@ -804,7 +837,7 @@ export const CanvasApp: React.FC = () => {
       if (positions.length === 0) return;
 
       const minX = Math.min(...positions.map((p) => p.x));
-      const minY = Math.min(...positions.map((p) => p.y));
+      const minY = Math.min(...positions.map((p) => p.y)) - 52;
       const maxX = Math.max(...positions.map((p) => p.x + p.width));
       const maxY = Math.max(...positions.map((p) => p.y + p.height + 50));
 
@@ -813,7 +846,7 @@ export const CanvasApp: React.FC = () => {
 
       const scaleX = rect.width / contentWidth;
       const scaleY = rect.height / contentHeight;
-      const nextZoom = clampZoom(Math.min(scaleX, scaleY, 1.0));
+      const nextZoom = clampZoom(Math.min(scaleX, scaleY, 0.92));
 
       const centerX = (minX + maxX) / 2;
       const centerY = (minY + maxY) / 2;
@@ -831,23 +864,47 @@ export const CanvasApp: React.FC = () => {
     [triggerCameraTransition]
   );
 
+  // Zoom-fit camera onto a single User Flow row
+  const focusOnFlow = useCallback(
+    (flowId: string) => {
+      const targetFlow = flowAnalysis.flows.find((f) => f.id === flowId);
+      if (!targetFlow) return;
+      const subLayout: ArtboardLayoutMap = {};
+      for (const id of targetFlow.screenIds) {
+        if (layout[id]) {
+          subLayout[id] = layout[id];
+        }
+      }
+      if (Object.keys(subLayout).length === 0) return;
+      if (targetFlow.screenIds[0]) {
+        setActiveScreenId(targetFlow.screenIds[0]);
+      }
+      setHasUserFocusedScreen(false);
+      fitCameraToLayout(subLayout);
+    },
+    [flowAnalysis.flows, layout, fitCameraToLayout]
+  );
+
   const handleFitAllScreens = useCallback(() => {
+    setHasUserFocusedScreen(false);
     fitCameraToLayout(layout);
   }, [fitCameraToLayout, layout]);
 
-  // Reset layout to clean multi-row grid and fit in viewport
-  const handleResetGridLayout = useCallback(() => {
-    const reset = buildDefaultLayout(screens);
-    setLayout(reset);
-    fitCameraToLayout(reset);
+  // Snap all screens cleanly back into User Flow rows and fit in viewport
+  const handleTidyFlows = useCallback(() => {
+    setHasUserFocusedScreen(false);
+    const nextPositions = flowAnalysis.positions;
+    layoutRef.current = nextPositions;
+    setLayout(nextPositions);
+    fitCameraToLayout(nextPositions);
     void fetch('/api/layout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(reset),
+      body: JSON.stringify(nextPositions),
     });
-  }, [screens, fitCameraToLayout]);
+  }, [flowAnalysis.positions, fitCameraToLayout]);
 
-  // Move single artboard
+  // Move single artboard live during drag
   const handleMoveArtboard = useCallback((screenId: string, nextX: number, nextY: number) => {
     setLayout((prev) => {
       const current = prev[screenId] ?? {
@@ -860,9 +917,34 @@ export const CanvasApp: React.FC = () => {
         ...prev,
         [screenId]: { ...current, x: nextX, y: nextY },
       };
+      layoutRef.current = updated;
       return updated;
     });
   }, []);
+
+  // Persist custom coordinates when user finishes dragging an artboard header
+  const handleMoveArtboardCommit = useCallback(
+    (screenId: string, finalX: number, finalY: number) => {
+      const current = layoutRef.current[screenId] ?? {
+        x: finalX,
+        y: finalY,
+        width: DEFAULT_WIDTH,
+        height: DEFAULT_HEIGHT,
+      };
+      const nextLayout: ArtboardLayoutMap = {
+        ...layoutRef.current,
+        [screenId]: { ...current, x: finalX, y: finalY },
+      };
+      layoutRef.current = nextLayout;
+      setLayout(nextLayout);
+      void fetch('/api/layout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(nextLayout),
+      });
+    },
+    []
+  );
 
   // Handle interactive navigation inside a React Native screen
   const handleNavigateFlow = useCallback(
@@ -889,8 +971,15 @@ export const CanvasApp: React.FC = () => {
     const startY = e.clientY;
     const startPanX = panRef.current.x;
     const startPanY = panRef.current.y;
+    let didDrag = false;
 
     const handleMove = (moveEvent: PointerEvent) => {
+      if (
+        Math.abs(moveEvent.clientX - startX) > 3 ||
+        Math.abs(moveEvent.clientY - startY) > 3
+      ) {
+        didDrag = true;
+      }
       applyDirectPanTransform(
         startPanX + (moveEvent.clientX - startX),
         startPanY + (moveEvent.clientY - startY),
@@ -901,6 +990,9 @@ export const CanvasApp: React.FC = () => {
     const handleUp = () => {
       setIsPanning(false);
       applyDirectPanTransform(panRef.current.x, panRef.current.y, true);
+      if (!didDrag) {
+        setHasUserFocusedScreen(false);
+      }
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
     };
@@ -1219,9 +1311,9 @@ export const CanvasApp: React.FC = () => {
           <button
             type="button"
             className="zelune-interactive zelune-icon-reveal-btn"
-            onClick={handleResetGridLayout}
-            title="Auto-Arrange Clean Artboard Grid"
-            aria-label="Auto-Arrange Clean Artboard Grid"
+            onClick={handleTidyFlows}
+            title="Tidy User Flow Rows"
+            aria-label="Tidy User Flow Rows"
             style={{
               padding: '6px 8px',
               borderRadius: 6,
@@ -1233,8 +1325,8 @@ export const CanvasApp: React.FC = () => {
               cursor: 'pointer',
             }}
           >
-            <LayoutGrid size={13} style={{ flexShrink: 0 }} />
-            <span className="zelune-reveal-label">Grid</span>
+            <GitBranch size={13} style={{ flexShrink: 0 }} />
+            <span className="zelune-reveal-label">Tidy Flows</span>
           </button>
 
           <button
@@ -1344,7 +1436,7 @@ export const CanvasApp: React.FC = () => {
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Layers size={12} color="#38BDF8" />
-                  <span>SCREENS ({screens.length})</span>
+                  <span>FLOWS ({flowAnalysis.flows.length}) · {screens.length}</span>
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                   <button
@@ -1386,45 +1478,151 @@ export const CanvasApp: React.FC = () => {
                 </div>
               </div>
 
-              {screens.map((scr) => {
-                const isSelected = activeScreenId === scr.id;
+              {flowAnalysis.flows.map((flow) => {
+                const dotColor = FLOW_DOT_COLORS[flow.accent] ?? '#6366F1';
+                const formattedIdx = String(flow.index).padStart(2, '0');
                 return (
-                  <button
-                    key={scr.id}
-                    type="button"
-                    className="zelune-interactive zelune-rail-item"
-                    onClick={() => focusOnScreen(scr.id)}
+                  <div
+                    key={flow.id}
                     style={{
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      width: '100%',
-                      paddingLeft: 10,
-                      paddingRight: 10,
-                      borderRadius: 7,
-                      border: `1px solid ${
-                        isSelected ? 'rgba(56, 189, 248, 0.35)' : 'transparent'
-                      }`,
-                      backgroundColor: isSelected ? 'var(--studio-surface-2)' : 'transparent',
-                      color: isSelected ? 'var(--studio-text-primary)' : 'var(--studio-text-secondary)',
-                      fontSize: 12.5,
-                      fontWeight: isSelected ? 600 : 500,
-                      cursor: 'pointer',
-                      textAlign: 'left',
+                      flexDirection: 'column',
+                      gap: 2,
+                      marginBottom: 8,
                     }}
                   >
-                    <span>{scr.id}</span>
-                    <span
-                      className="tabular-nums"
+                    <button
+                      type="button"
+                      className="zelune-interactive tabular-nums"
+                      onClick={() => focusOnFlow(flow.id)}
+                      title={`Zoom to ${flow.title}`}
                       style={{
-                        fontSize: 10,
-                        fontFamily: 'var(--font-mono)',
-                        color: isSelected ? '#38BDF8' : 'var(--studio-text-muted)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        width: '100%',
+                        padding: '5px 7px',
+                        borderRadius: 6,
+                        border: '1px solid transparent',
+                        backgroundColor: 'transparent',
+                        color: 'var(--studio-text-muted)',
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        letterSpacing: '0.01em',
+                        cursor: 'pointer',
+                        textAlign: 'left',
                       }}
                     >
-                      {scr.outgoingFlows.length}→
-                    </span>
-                  </button>
+                      <span
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          minWidth: 0,
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 6.5,
+                            height: 6.5,
+                            borderRadius: '50%',
+                            backgroundColor: dotColor,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 9.5,
+                            opacity: 0.72,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {formattedIdx}
+                        </span>
+                        <span
+                          style={{
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            color: 'var(--studio-text-secondary)',
+                          }}
+                        >
+                          {flow.title}
+                        </span>
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9.5,
+                          opacity: 0.65,
+                          marginLeft: 4,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {flow.screenIds.length}
+                      </span>
+                    </button>
+
+                    {flow.screenIds.map((screenId) => {
+                      const scr = screenByIdMap.get(screenId);
+                      if (!scr) return null;
+                      const isSelected = activeScreenId === scr.id;
+                      return (
+                        <button
+                          key={scr.id}
+                          type="button"
+                          className="zelune-interactive zelune-rail-item"
+                          onClick={() => focusOnScreen(scr.id)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            width: '100%',
+                            paddingLeft: 18,
+                            paddingRight: 10,
+                            borderRadius: 7,
+                            border: `1px solid ${
+                              isSelected ? 'rgba(56, 189, 248, 0.35)' : 'transparent'
+                            }`,
+                            backgroundColor: isSelected
+                              ? 'var(--studio-surface-2)'
+                              : 'transparent',
+                            color: isSelected
+                              ? 'var(--studio-text-primary)'
+                              : 'var(--studio-text-secondary)',
+                            fontSize: 12,
+                            fontWeight: isSelected ? 600 : 500,
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <span
+                            style={{
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {scr.id}
+                          </span>
+                          <span
+                            className="tabular-nums"
+                            style={{
+                              fontSize: 10,
+                              fontFamily: 'var(--font-mono)',
+                              color: isSelected ? '#38BDF8' : 'var(--studio-text-muted)',
+                              flexShrink: 0,
+                              marginLeft: 6,
+                            }}
+                          >
+                            {scr.outgoingFlows.length}→
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 );
               })}
             </div>
@@ -1561,11 +1759,19 @@ export const CanvasApp: React.FC = () => {
                 : 'none',
             }}
           >
+            <FlowSwimlanesLayer
+              flows={flowAnalysis.flows}
+              layout={layout}
+              colorScheme={colorScheme}
+              onFocusFlow={focusOnFlow}
+            />
+
             {showFlows && (
               <FlowArrowsLayer
                 screens={screens}
                 layout={layout}
-                activeScreenId={activeScreenId}
+                screenFlowMap={flowAnalysis.screenFlowMap}
+                spotlightScreenId={hasUserFocusedScreen ? activeScreenId : null}
                 highlightedScreenId={highlightedScreenId}
                 onSelectFlow={handleSelectFlow}
               />
@@ -1597,9 +1803,10 @@ export const CanvasApp: React.FC = () => {
                   selectedElement={isSelectedScreen ? selectedElement : null}
                   inspectedElement={isSelectedScreen ? inspectedData : null}
                   onSelectElement={handleSelectElement}
-                  onSelectScreen={setActiveScreenId}
+                  onSelectScreen={handleSelectScreen}
                   onFocusScreen={focusOnScreen}
                   onMoveArtboard={handleMoveArtboard}
+                  onMoveArtboardCommit={handleMoveArtboardCommit}
                   onNavigateFlow={handleNavigateFlow}
                   onPatchElement={handlePatchElement}
                   onReorderElement={handleReorderElement}
@@ -1623,7 +1830,7 @@ export const CanvasApp: React.FC = () => {
           onDuplicate={handleDuplicateElement}
           onDelete={handleDeleteElement}
           onReorder={handleReorderElement}
-          onSelectScreen={setActiveScreenId}
+          onSelectScreen={handleSelectScreen}
           onClearSelection={() => {
             setSelectedElement(null);
             setInspectedData(null);

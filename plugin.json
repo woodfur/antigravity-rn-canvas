@@ -1,7 +1,7 @@
 {
   "name": "zelune",
   "displayName": "Zelune — React Native Visual Canvas",
-  "version": "1.6.5",
+  "version": "1.6.6",
   "description": "Zelune MCP & Figma-style multi-screen React Native visual canvas with live surgical AST patching and navigation flow visualization for Google Antigravity.",
   "logo": "assets/logo.svg",
   "suggestedPrompts": [

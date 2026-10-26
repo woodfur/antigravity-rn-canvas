@@ -36,6 +36,7 @@ interface ScreenArtboardProps {
   onSelectScreen: (screenId: string) => void;
   onFocusScreen: (screenId: string) => void;
   onMoveArtboard: (screenId: string, nextX: number, nextY: number) => void;
+  onMoveArtboardCommit?: (screenId: string, finalX: number, finalY: number) => void;
   onNavigateFlow: (fromScreen: string, toScreen: string) => void;
   onPatchElement: (payload: PatchPayload) => Promise<void>;
   onReorderElement: (payload: ReorderPayload) => Promise<void>;
@@ -99,6 +100,7 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = React.memo(({
   onSelectScreen,
   onFocusScreen,
   onMoveArtboard,
+  onMoveArtboardCommit,
   onNavigateFlow,
   onPatchElement,
   onReorderElement,
@@ -270,21 +272,30 @@ export const ScreenArtboard: React.FC<ScreenArtboardProps> = React.memo(({
     const startClientY = e.clientY;
     const initialX = position.x;
     const initialY = position.y;
+    let latestX = initialX;
+    let latestY = initialY;
+    let hasMoved = false;
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       const dx = (moveEvent.clientX - startClientX) / zoom;
       const dy = (moveEvent.clientY - startClientY) / zoom;
-      onMoveArtboard(
-        screen.id,
-        Math.round(initialX + dx),
-        Math.round(initialY + dy)
-      );
+      const nextX = Math.round(initialX + dx);
+      const nextY = Math.round(initialY + dy);
+      if (nextX !== initialX || nextY !== initialY) {
+        hasMoved = true;
+      }
+      latestX = nextX;
+      latestY = nextY;
+      onMoveArtboard(screen.id, nextX, nextY);
     };
 
     const handlePointerUp = () => {
       setIsDraggingHeader(false);
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
+      if (hasMoved) {
+        onMoveArtboardCommit?.(screen.id, latestX, latestY);
+      }
     };
 
     window.addEventListener('pointermove', handlePointerMove);
